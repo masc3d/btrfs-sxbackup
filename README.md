@@ -5,7 +5,6 @@ Btrfs snapshot backup utility with push/pull support via SSH
 
 ```
 btrfs-sxbackup.py --help
-
 btrfs-sxbackup.py v0.2.5 by masc
 usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
                          [-dm DESTINATION_MAX_SNAPSHOTS]
@@ -30,8 +29,7 @@ optional arguments:
   -ss SOURCE_SNAPSHOT_SUBVOLUME, --source-snapshot-subvolume SOURCE_SNAPSHOT_SUBVOLUME
                         Override path to source snapshot container subvolume.
                         Both absolute and relative paths are possible.
-                        Relative paths relate ot source subvolume. (defaults
-                        to sxbackup relative to source subvolume)
+                        (defaults to 'sxbackup', relative to source subvolume)
 ```
 
 ## Dependencies ##
