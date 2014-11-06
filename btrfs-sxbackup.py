@@ -179,9 +179,6 @@ source_url = parse.urlsplit(args.source_subvolume)
 dest_url = parse.urlsplit(args.destination_snapshot_subvolume)
 source_snapshot_subvolume = args.source_snapshot_subvolume if args.source_snapshot_subvolume[0] == os.pathsep else os.path.join(source_url.path, args.source_snapshot_subvolume)
 
-logger.info(source_snapshot_subvolume)
-exit(0)
-
 sxbackup = SxBackup(\
     source_url = source_url,\
     source_snapshot_subvolume = source_snapshot_subvolume,\
