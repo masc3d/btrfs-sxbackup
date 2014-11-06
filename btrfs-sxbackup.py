@@ -122,10 +122,8 @@ class SxBackup:
         receive_returncode = receive_process.wait()
 
         if send_returncode != 0:
-            self.__logger.info('error [%s] code [%s]' % (send_command, send_returncode))    
             raise subprocess.CalledProcessError(send_returncode, send_command, None)
         if receive_returncode != 0:
-            self.__logger.info('error [%s] code [%s]' % (receive_command, receive_returncode))    
             raise subprocess.CalledProcessError(receive_returncode, receive_command, None)
 
         # After successful transmission, rename source and destinationside snapshot subvolumes (from pending to timestamp-based name)
