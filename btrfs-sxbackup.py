@@ -138,14 +138,14 @@ class SxBackup:
         dest_snapshot_names = [new_snapshot_name] + dest_snapshot_names
 
         # Clean out excess backups/snapshots
-        if len(source_snapshot_names) >= self.source_max_snapshots:
+        if len(source_snapshot_names) > self.source_max_snapshots:
             snapshots_to_remove = self.__snapshots_to_remove(source_snapshot_names, self.source_max_snapshots)
             self.__logger.info('Removing source snapshots [%s]' % (", ".join(snapshots_to_remove)))
 
             command = self.__create_cleanup_bash_command(self.source_snapshot_subvolume, snapshots_to_remove)
             subprocess.check_output(self.__create_subprocess_args(self.source_url, command))
 
-        if len(dest_snapshot_names) >= self.dest_max_snapshots:
+        if len(dest_snapshot_names) > self.dest_max_snapshots:
             snapshots_to_remove = self.__snapshots_to_remove(dest_snapshot_names, self.dest_max_snapshots)
             self.__logger.info('Removing destination snapshots [%s]' % (", ".join(snapshots_to_remove)))
 
