@@ -32,6 +32,7 @@ optional arguments:
 ```
 
 ## Dependencies ##
+* python3
 * btrfs-progs
 * bash
 * pv (for progress indication)
@@ -42,10 +43,10 @@ optional arguments:
 
 ## Examples ##
 ```
-btrfs-backup.py ssh://root@myhost/ /backup/myhost
+btrfs-sxbackup.py ssh://root@myhost/ /backup/myhost
 ```
 Pulls snapshot backups of / on remote host 'myhost' to local subvolume /backup/myhost
 ```
-btrfs-backup.py / ssh://root@mybackupserver/backup/myhost
+btrfs-sxbackup.py / ssh://root@mybackupserver/backup/myhost
 ```
 Pushes snapshot backups of local subvolume / to remote subvolume /backup/myhost on host 'mybackupserver' 
