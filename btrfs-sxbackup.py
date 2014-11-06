@@ -170,8 +170,8 @@ logger.info('%s v%s by %s' % (os.path.basename(__file__), __version__, __author_
 
 # Parse arguments
 parser = ArgumentParser()
-parser.add_argument('source_subvolume', type=str, help='Source subvolume to snapshot/backup. Can be a local path or SSH url.')
-parser.add_argument('destination_snapshot_subvolume', type=str, help='Destination subvolume storing received snapshots. Can be a local path or SSH url.')
+parser.add_argument('source_subvolume', type=str, help='Source subvolume to snapshot/backup. Local path or SSH url.')
+parser.add_argument('destination_snapshot_subvolume', type=str, help='Destination subvolume storing received snapshots. Local path or SSH url.')
 parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
 parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
 parser.add_argument('-ss', '--source-snapshot-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. Relative paths relate ot source subvolume. (defaults to sxbackup relative to source subvolume)')
