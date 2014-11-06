@@ -32,6 +32,7 @@ optional arguments:
 ```
 
 ## Dependencies ##
+* python3
 * btrfs-progs
 * bash
 * pv (for progress indication)
