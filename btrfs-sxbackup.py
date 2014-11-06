@@ -174,15 +174,19 @@ parser.add_argument('source_subvolume', type=str, help='Source subvolume to snap
 parser.add_argument('destination_snapshot_subvolume', type=str, help='Destination subvolume storing received snapshots. Can be a local path or SSH url.')
 parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of client snapshots to keep (defaults to 10).')
 parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of server snapshots to keep (defaults to 10).')
-parser.add_argument('-ss', '--source-snapshot-subvolume', type=str, default='/sxbackup', help='Override path to source snapshot container subvolume (defaults to /sxbackup)')
+parser.add_argument('-ss', '--source-snapshot-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. Relative paths relate ot source subvolume. (defaults to sxbackup relative to source subvolume)')
 args = parser.parse_args()
 
 source_url = parse.urlsplit(args.source_subvolume)
 dest_url = parse.urlsplit(args.destination_snapshot_subvolume)
+source_snapshot_subvolume = args.source_snapshot_subvolume if args.source_snapshot_subvolume[0] == os.pathsep else os.path.join(source_url.path, args.source_snapshot_subvolume)
+
+logger.info(source_snapshot_subvolume)
+exit(0)
 
 sxbackup = SxBackup(\
     source_url = source_url,\
-    source_snapshot_subvolume = args.source_snapshot_subvolume,\
+    source_snapshot_subvolume = source_snapshot_subvolume,\
     source_max_snapshots = args.source_max_snapshots,\
     dest_url = dest_url,\
     dest_max_snapshots = args.destination_max_snapshots)
