@@ -46,8 +46,8 @@ optional arguments:
 ```
 btrfs-sxbackup.py ssh://root@myhost/ /backup/myhost
 ```
-Pulls snapshot backups of _/_ on remote host _myhost_ to local subvolume _/backup/myhost_
+Pulls snapshot backups of ___/___ on remote host ___myhost___ to local subvolume ___/backup/myhost___
 ```
 btrfs-sxbackup.py / ssh://root@mybackupserver/backup/myhost
 ```
-Pushes snapshot backups of local subvolume _/_ to remote subvolume _/backup/myhost_ on host _mybackupserver_
+Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver___
