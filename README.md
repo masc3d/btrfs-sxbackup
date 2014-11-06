@@ -31,13 +31,20 @@ optional arguments:
                         (defaults to /sxbackup)
 ```
 
-## Examples ##
+## Dependencies ##
+* btrfs-progs
+* bash
+* pv (for progress indication)
+* ssh (when pushing/pulling, not required for local operation)
 
+## Setup ##
+* when using ssh, public/private key authentication should be setup
+
+## Examples ##
 ```
 btrfs-backup.py ssh://root@myhost/ /backup/myhost
 ```
 Pulls snapshot backups of / on remote host 'myhost' to local subvolume /backup/myhost
-
 ```
 btrfs-backup.py / ssh://root@mybackupserver/backup/myhost
 ```
