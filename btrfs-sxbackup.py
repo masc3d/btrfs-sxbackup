@@ -84,13 +84,13 @@ class SxBackup:
         subprocess.check_output(self.__create_subprocess_args(self.dest_url, \
             'if [ -d %s ] ; then btrfs sub del %s; fi' % (dest_temp_subvolume, dest_temp_subvolume)))
 
-        # Retrieve client snapshots and print
+        # Retrieve source snapshots and print
         source_snapshot_names = self.__retrieve_snapshot_names(self.source_url, self.source_snapshot_subvolume)
         dest_snapshot_names = self.__retrieve_snapshot_names(self.dest_url, self.dest_url.path)
 
         new_snapshot_name = self.__create_snapshot_name()
 
-        # Create new temporary snapshot (client)
+        # Create new temporary snapshot (source)
         self.__logger.info('Creating source snapshot')
         subprocess.check_output(self.__create_subprocess_args(self.source_url, \
             'btrfs sub snap -r %s %s && sync' % (self.source_url.path, source_temp_subvolume)))
@@ -128,7 +128,7 @@ class SxBackup:
             self.__logger.info('error [%s] code [%s]' % (receive_command, receive_returncode))    
             raise subprocess.CalledProcessError(receive_returncode, receive_command, None)
 
-        # After successful transmission, rename client and serverside snapshot subvolumes (from pending to timestamp-based name)
+        # After successful transmission, rename source and destinationside snapshot subvolumes (from pending to timestamp-based name)
         self.__logger.info('Finalizing backup')
         subprocess.check_output(self.__create_subprocess_args(self.source_url, \
             'mv %s %s' % (source_temp_subvolume, os.path.join(self.source_snapshot_subvolume, new_snapshot_name))))
@@ -172,8 +172,8 @@ logger.info('%s v%s by %s' % (os.path.basename(__file__), __version__, __author_
 parser = ArgumentParser()
 parser.add_argument('source_subvolume', type=str, help='Source subvolume to snapshot/backup. Can be a local path or SSH url.')
 parser.add_argument('destination_snapshot_subvolume', type=str, help='Destination subvolume storing received snapshots. Can be a local path or SSH url.')
-parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of client snapshots to keep (defaults to 10).')
-parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of server snapshots to keep (defaults to 10).')
+parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
+parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
 parser.add_argument('-ss', '--source-snapshot-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. Relative paths relate ot source subvolume. (defaults to sxbackup relative to source subvolume)')
 args = parser.parse_args()
 
