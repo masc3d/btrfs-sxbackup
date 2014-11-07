@@ -40,7 +40,7 @@ optional arguments:
 * ssh (when pushing/pulling, not required for local operation)
 
 ## Setup ##
-* when using ssh, public/private key authentication should be setup
+* when using ssh, public/private key authentication should be set up
 
 ## Examples ##
 ```
