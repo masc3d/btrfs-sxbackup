@@ -8,15 +8,14 @@ btrfs-sxbackup.py --help
 btrfs-sxbackup.py v0.2.5 by masc
 usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
                          [-dm DESTINATION_MAX_SNAPSHOTS]
-                         [-ss SOURCE_SNAPSHOT_SUBVOLUME]
-                         source_subvolume destination_snapshot_subvolume
+                         [-ss SOURCE_CONTAINER_SUBVOLUME]
+                         source_subvolume destination_container_subvolume
 
 positional arguments:
-  source_subvolume      Source subvolume to snapshot/backup. Local path or SSH
-                        url.
-  destination_snapshot_subvolume
-                        Destination subvolume storing received snapshots.
-                        Local path or SSH url.
+  source_subvolume      Source subvolume to backup. Local path or SSH url.
+  destination_container_subvolume
+                        Destination subvolume receiving snapshots. Local path
+                        or SSH url.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -26,7 +25,7 @@ optional arguments:
   -dm DESTINATION_MAX_SNAPSHOTS, --destination-max-snapshots DESTINATION_MAX_SNAPSHOTS
                         Maximum number of destination snapshots to keep
                         (defaults to 10).
-  -ss SOURCE_SNAPSHOT_SUBVOLUME, --source-snapshot-subvolume SOURCE_SNAPSHOT_SUBVOLUME
+  -ss SOURCE_CONTAINER_SUBVOLUME, --source-container-subvolume SOURCE_CONTAINER_SUBVOLUME
                         Override path to source snapshot container subvolume.
                         Both absolute and relative paths are possible.
                         (defaults to 'sxbackup', relative to source subvolume)

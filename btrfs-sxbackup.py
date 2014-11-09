@@ -193,8 +193,12 @@ try:
 
     # Perform actual backup
     sxbackup.run()
+except SystemExit as e:
+    if e.code != 0:
+        raise
 except:
     logger.error('ERROR {0} {1}'.format(sys.exc_info(), traceback.extract_tb(sys.exc_info()[2])))
     raise
+
 exit(0)
 
