@@ -10,12 +10,13 @@ __copyright__ = 'Copyright 2014, Marco Schindler'
 import datetime
 import os
 import logging
+import logging.handlers
 import sys
 import subprocess
 import urllib
 import time
+import traceback
 
-from logging import StreamHandler
 from argparse import ArgumentParser
 from datetime import datetime
 from urllib import parse
@@ -23,12 +24,12 @@ from urllib import parse
 class SxBackup:
     TEMP_BACKUP_NAME = 'temp'
 
-    def __init__(self, source_url, source_snapshot_subvolume, source_max_snapshots, dest_url, dest_max_snapshots):
+    def __init__(self, source_url, source_container_subvolume, source_max_snapshots, dest_url, dest_max_snapshots):
         ''' c'tor '''
         self.__logger = logging.getLogger(self.__class__.__name__)
 
         self.source_url = source_url
-        self.source_snapshot_subvolume = source_snapshot_subvolume
+        self.source_container_subvolume = source_container_subvolume
         self.source_max_snapshots = source_max_snapshots
         self.dest_url = dest_url
         self.dest_max_snapshots = dest_max_snapshots
@@ -44,15 +45,15 @@ class SxBackup:
         ''' Create formatted snapshot name '''
         return datetime.utcnow().strftime('%Y%m%d-%H%M%S-UTC')
 
-    def __create_cleanup_bash_command(self, snapshot_subvolume, snapshot_names):
+    def __create_cleanup_bash_command(self, container_subvolume, snapshot_names):
         ''' Creates bash comand string to remove multiple snapshots within a btrfs subvolume '''
-        return " && ".join(map(lambda x: 'btrfs sub del %s' % (os.path.join(snapshot_subvolume, x)), snapshot_names))
+        return " && ".join(map(lambda x: 'btrfs sub del %s' % (os.path.join(container_subvolume, x)), snapshot_names))
 
-    def __retrieve_snapshot_names(self, url, snapshot_subvolume):
+    def __retrieve_snapshot_names(self, url, container_subvolume):
         ''' Determine snapshot names. Snapshot names returned are sorted in reverse order (newest first) '''
 
-        self.__logger.info('Retrieving snapshot names from [%s] [%s]' % (url.geturl(), snapshot_subvolume))
-        output = subprocess.check_output(self.__create_subprocess_args(url, 'ls -1 %s' % (snapshot_subvolume)))
+        self.__logger.info('Retrieving snapshot names from [%s] container [%s]' % (url.hostname if url.hostname is not None else 'localhost', container_subvolume))
+        output = subprocess.check_output(self.__create_subprocess_args(url, 'ls -1 %s' % (container_subvolume)))
         # output is delivered as a byte sequence, decode to unicode string and split lines
         lines = output.decode().splitlines()
         return sorted(lines, reverse=True)
@@ -70,11 +71,11 @@ class SxBackup:
         self.__logger.info('Preparing source and destination environment')
         # Check for and create source snapshot volume if required
         subprocess.check_output(self.__create_subprocess_args(self.source_url, \
-            'if [ ! -d %s ] ; then btrfs sub create %s; fi' % (self.source_snapshot_subvolume, self.source_snapshot_subvolume)))
+            'if [ ! -d %s ] ; then btrfs sub create %s; fi' % (self.source_container_subvolume, self.source_container_subvolume)))
 
-        # Paths for subvolumes of current backup run (called pending on both sides)
-        # Subvolumes will be renmed to timestamp based name on both side if successful.
-        source_temp_subvolume = os.path.join(self.source_snapshot_subvolume, self.TEMP_BACKUP_NAME)
+        # Paths for subvolumes of current backup run
+        # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
+        source_temp_subvolume = os.path.join(self.source_container_subvolume, self.TEMP_BACKUP_NAME)
         dest_temp_subvolume = os.path.join(self.dest_url.path, self.TEMP_BACKUP_NAME)
 
         # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
@@ -85,7 +86,7 @@ class SxBackup:
             'if [ -d %s ] ; then btrfs sub del %s; fi' % (dest_temp_subvolume, dest_temp_subvolume)))
 
         # Retrieve source snapshots and print
-        source_snapshot_names = self.__retrieve_snapshot_names(self.source_url, self.source_snapshot_subvolume)
+        source_snapshot_names = self.__retrieve_snapshot_names(self.source_url, self.source_container_subvolume)
         dest_snapshot_names = self.__retrieve_snapshot_names(self.dest_url, self.dest_url.path)
 
         new_snapshot_name = self.__create_snapshot_name()
@@ -95,7 +96,7 @@ class SxBackup:
         subprocess.check_output(self.__create_subprocess_args(self.source_url, \
             'btrfs sub snap -r %s %s && sync' % (self.source_url.path, source_temp_subvolume)))
 
-        # Transfer pending snapshot
+        # Transfer temporary snapshot
         self.__logger.info('Sending snapshot')
 
         # btrfs send command/subprocess
@@ -105,7 +106,7 @@ class SxBackup:
                 'btrfs send %s' % (source_temp_subvolume))
         else:
             send_command = self.__create_subprocess_args(self.source_url, \
-                'btrfs send -p %s %s' % (os.path.join(self.source_snapshot_subvolume, source_snapshot_names[0]), source_temp_subvolume))
+                'btrfs send -p %s %s' % (os.path.join(self.source_container_subvolume, source_snapshot_names[0]), source_temp_subvolume))
         send_process = subprocess.Popen(send_command, stdout=subprocess.PIPE)
 
         # pv command/subprocess for progress indication
@@ -129,7 +130,7 @@ class SxBackup:
         # After successful transmission, rename source and destinationside snapshot subvolumes (from pending to timestamp-based name)
         self.__logger.info('Finalizing backup')
         subprocess.check_output(self.__create_subprocess_args(self.source_url, \
-            'mv %s %s' % (source_temp_subvolume, os.path.join(self.source_snapshot_subvolume, new_snapshot_name))))
+            'mv %s %s' % (source_temp_subvolume, os.path.join(self.source_container_subvolume, new_snapshot_name))))
         subprocess.check_output(self.__create_subprocess_args(self.dest_url, \
             'mv %s %s' % (dest_temp_subvolume, os.path.join(self.dest_url.path, new_snapshot_name))))
 
@@ -142,52 +143,58 @@ class SxBackup:
             snapshots_to_remove = self.__snapshots_to_remove(source_snapshot_names, self.source_max_snapshots)
             self.__logger.info('Removing source snapshots [%s]' % (", ".join(snapshots_to_remove)))
 
-            command = self.__create_cleanup_bash_command(self.source_snapshot_subvolume, snapshots_to_remove)
+            command = self.__create_cleanup_bash_command(self.source_container_subvolume, snapshots_to_remove)
             subprocess.check_output(self.__create_subprocess_args(self.source_url, command))
 
         if len(dest_snapshot_names) > self.dest_max_snapshots:
             snapshots_to_remove = self.__snapshots_to_remove(dest_snapshot_names, self.dest_max_snapshots)
             self.__logger.info('Removing destination snapshots [%s]' % (", ".join(snapshots_to_remove)))
 
-            command = self.__create_cleanup_bash_command(self.dest_snapshot_subvolume, snapshots_to_remove)
+            command = self.__create_cleanup_bash_command(self.dest_url.path, snapshots_to_remove)
             subprocess.check_output(self.__create_subprocess_args(self.dest_url, command))
 
         self.__logger.info('Backup [%s] created successfully' % (new_snapshot_name))
 
     def __str__(self):
         return 'Source [%s] snapshot container subvolume [%s] Destination [%s]' % \
-            (self.source_url.geturl(), self.source_snapshot_subvolume, self.dest_url.geturl())
+            (self.source_url.geturl(), self.source_container_subvolume, self.dest_url.geturl())
 
 
 # Initialize logging
 logger = logging.getLogger('')
-logger.addHandler(StreamHandler(sys.stdout))
+logger.addHandler(logging.StreamHandler(sys.stdout))
+logger.addHandler(logging.handlers.SysLogHandler('/dev/log'))
 logger.setLevel(logging.INFO)
 
 logger.info('%s v%s by %s' % (os.path.basename(__file__), __version__, __author__))
 
-# Parse arguments
-parser = ArgumentParser()
-parser.add_argument('source_subvolume', type=str, help='Source subvolume to snapshot/backup. Local path or SSH url.')
-parser.add_argument('destination_snapshot_subvolume', type=str, help='Destination subvolume storing received snapshots. Local path or SSH url.')
-parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
-parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
-parser.add_argument('-ss', '--source-snapshot-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. (defaults to \'sxbackup\', relative to source subvolume)')
-args = parser.parse_args()
+try:
+    # Parse arguments
+    parser = ArgumentParser()
+    parser.add_argument('source_subvolume', type=str, help='Source subvolume to backup. Local path or SSH url.')
+    parser.add_argument('destination_container_subvolume', type=str, help='Destination subvolume receiving snapshots. Local path or SSH url.')
+    parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
+    parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
+    parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. (defaults to \'sxbackup\', relative to source subvolume)')
+    args = parser.parse_args()
 
-source_url = parse.urlsplit(args.source_subvolume)
-dest_url = parse.urlsplit(args.destination_snapshot_subvolume)
-source_snapshot_subvolume = args.source_snapshot_subvolume if args.source_snapshot_subvolume[0] == os.pathsep else os.path.join(source_url.path, args.source_snapshot_subvolume)
+    source_url = parse.urlsplit(args.source_subvolume)
+    dest_url = parse.urlsplit(args.destination_container_subvolume)
+    source_container_subvolume = args.source_container_subvolume if args.source_container_subvolume[0] == os.pathsep else os.path.join(source_url.path, args.source_container_subvolume)
 
-sxbackup = SxBackup(\
-    source_url = source_url,\
-    source_snapshot_subvolume = source_snapshot_subvolume,\
-    source_max_snapshots = args.source_max_snapshots,\
-    dest_url = dest_url,\
-    dest_max_snapshots = args.destination_max_snapshots)
+    sxbackup = SxBackup(\
+        source_url = source_url,\
+        source_container_subvolume = source_container_subvolume,\
+        source_max_snapshots = args.source_max_snapshots,\
+        dest_url = dest_url,\
+        dest_max_snapshots = args.destination_max_snapshots)
 
-logger.info(sxbackup)
+    logger.info(sxbackup)
 
-# Perform actual backup
-sxbackup.run()
+    # Perform actual backup
+    sxbackup.run()
+except:
+    logger.error('ERROR {0} {1}'.format(sys.exc_info(), traceback.extract_tb(sys.exc_info()[2])))
+    raise
 exit(0)
+
