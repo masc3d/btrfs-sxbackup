@@ -21,6 +21,10 @@ from argparse import ArgumentParser
 from datetime import datetime
 from urllib import parse
 
+app_name = os.path.splitext(os.path.basename(__file__))[0]
+cmd_bash = '/bin/bash'
+cmd_ssh = '/usr/bin/ssh'
+
 class SxBackup:
     TEMP_BACKUP_NAME = 'temp'
 
@@ -39,7 +43,8 @@ class SxBackup:
         # in case cmd is a regular value, convert to list
         cmd = cmd if cmd is list else [cmd]
         # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
-        return ['bash', '-c'] + cmd if url.hostname == None else ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (url.username, url.hostname)] + cmd
+        return [cmd_bash, '-c'] + cmd if url.hostname == None else \
+            [cmd_ssh, '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (url.username, url.hostname)] + cmd
 
     def __create_snapshot_name(self):
         ''' Create formatted snapshot name '''
@@ -163,10 +168,12 @@ class SxBackup:
 # Initialize logging
 logger = logging.getLogger('')
 logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.addHandler(logging.handlers.SysLogHandler('/dev/log'))
+log_syslog_handler = logging.handlers.SysLogHandler('/dev/log')
+log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(message)s'))
+logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
 
-logger.info('%s v%s by %s' % (os.path.basename(__file__), __version__, __author__))
+logger.info('%s v%s by %s' % (app_name, __version__, __author__))
 
 try:
     # Parse arguments
