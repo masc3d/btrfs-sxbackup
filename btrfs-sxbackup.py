@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-__version__ = '0.2.5'
+__version__ = '0.2.6'
 __author__ = 'masc'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'
