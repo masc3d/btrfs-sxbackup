@@ -22,8 +22,6 @@ from datetime import datetime
 from urllib import parse
 
 app_name = os.path.splitext(os.path.basename(__file__))[0]
-cmd_bash = '/bin/bash'
-cmd_ssh = '/usr/bin/ssh'
 
 class SxBackup:
     TEMP_BACKUP_NAME = 'temp'
@@ -43,8 +41,8 @@ class SxBackup:
         # in case cmd is a regular value, convert to list
         cmd = cmd if cmd is list else [cmd]
         # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
-        return [cmd_bash, '-c'] + cmd if url.hostname == None else \
-            [cmd_ssh, '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (url.username, url.hostname)] + cmd
+        return ['bash', '-c'] + cmd if url.hostname == None else \
+            ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (url.username, url.hostname)] + cmd
 
     def __create_snapshot_name(self):
         ''' Create formatted snapshot name '''
@@ -122,6 +120,22 @@ class SxBackup:
         receive_command = self.__create_subprocess_args(self.dest_url, \
             'btrfs receive %s' % (self.dest_url.path))
         receive_process = subprocess.Popen(receive_command, stdin=pv_process.stdout)
+
+        receive_returncode = None
+        send_returncode = None
+        while receive_returncode is None or send_returncode is None:
+            receive_returncode = receive_process.poll()
+            send_returncode = send_process.poll()
+
+            if receive_returncode is not None and receive_returncode != 0:
+                send_process.kill()
+                break
+
+            if send_returncode is not None and send_returncode != 0:
+                receive_process.kill()
+                break
+
+            time.sleep(2)
 
         # wait for commands to complete
         send_returncode = send_process.wait()
