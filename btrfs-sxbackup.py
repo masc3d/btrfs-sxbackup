@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-__version__ = '0.2.6'
+__version__ = '0.2.7'
 __author__ = 'masc'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'
@@ -43,6 +43,14 @@ class SxBackup:
         # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
         return ['bash', '-c'] + cmd if url.hostname == None else \
             ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (url.username, url.hostname)] + cmd
+
+    def __does_command_exist(self, url, command):
+        hash_cmd = ['type ' + command]
+        if url is not None:
+            hash_cmd = self.__create_subprocess_args(url, hash_cmd)
+
+        hash_prc = subprocess.Popen(hash_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        return hash_prc.wait() == 0
 
     def __create_snapshot_name(self):
         ''' Create formatted snapshot name '''
@@ -110,16 +118,18 @@ class SxBackup:
         else:
             send_command = self.__create_subprocess_args(self.source_url, \
                 'btrfs send -p %s %s' % (os.path.join(self.source_container_subvolume, source_snapshot_names[0]), source_temp_subvolume))
-        send_process = subprocess.Popen(send_command, stdout=subprocess.PIPE)
+        send_process = subprocess.Popen(send_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # pv command/subprocess for progress indication
-        pv_command = ['pv']
-        pv_process = subprocess.Popen(pv_command, stdin=send_process.stdout, stdout=subprocess.PIPE)
+        pv_process = None 
+        if self.__does_command_exist(None, 'pv'):
+            pv_command = ['pv']
+            pv_process = subprocess.Popen(pv_command, stdin=send_process.stdout, stdout=subprocess.PIPE)
 
         # btrfs receive command/subprocess
         receive_command = self.__create_subprocess_args(self.dest_url, \
             'btrfs receive %s' % (self.dest_url.path))
-        receive_process = subprocess.Popen(receive_command, stdin=pv_process.stdout)
+        receive_process = subprocess.Popen(receive_command, stdin=pv_process.stdout if pv_process is not None else send_process.stdout, stdout=subprocess.PIPE)
 
         receive_returncode = None
         send_returncode = None

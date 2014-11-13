@@ -35,7 +35,7 @@ optional arguments:
 * python3
 * btrfs-progs
 * bash
-* pv (for progress indication)
+* pv (optional, provides progress indication if installed)
 * ssh (when pushing/pulling, not required for local operation)
 
 ## Setup ##
