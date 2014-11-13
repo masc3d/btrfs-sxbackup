@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-__version__ = '0.2.7'
+__version__ = '0.2.8'
 __author__ = 'masc'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'
@@ -8,6 +8,8 @@ __license__ = 'GPL'
 __copyright__ = 'Copyright 2014, Marco Schindler'
 
 import datetime
+import configparser
+import io
 import os
 import logging
 import logging.handlers
@@ -18,6 +20,7 @@ import time
 import traceback
 
 from argparse import ArgumentParser
+from configparser import ConfigParser
 from datetime import datetime
 from urllib import parse
 
@@ -26,22 +29,68 @@ app_name = os.path.splitext(os.path.basename(__file__))[0]
 class SxBackup:
     ''' Backup '''
 
+    CONFIG_FILENAME = '/etc/btrfs-sxbackup.conf'
+
     class Error(Exception):
         pass
+
+    class Configuration:
+        def __init__(self, config_type):
+            self.config_type = config_type
+            self.source = None
+            self.source_container = None
+            self.destination = None
+            self.keep = None
+
+        def read(self, fileobject):
+            parser = ConfigParser()
+            parser.read_file(fileobject)
+
+            section = self.config_type
+            self.source = parser.get(section, 'source', fallback=None)
+            self.source_container = parser.get(section, 'source-container', fallback=None)
+            self.destination = parser.get(section, 'destination', fallback=None)
+            self.keep = parser.get(section, 'keep', fallback=None)
+
+        def write(self, fileobject):
+            parser = ConfigParser()
+
+            section = self.config_type
+            parser.add_section(section)
+            if self.source is not None:
+                parser.set(section, 'source', self.source)
+            if self.source_container is not None:
+                parser.set(section, 'source-container', self.source_container)
+            if self.destination is not None:
+                parser.set(section, 'destination', self.destination)
+            if self.keep is not None:
+                parser.set(section, 'keep', self.keep)
+            parser.write(fileobject)
+
+        def __str__(self):
+            return 'Source [%s] Destination [%s] Keep [%s]' % (self.source, self.destination, self.keep)
 
     class Location:
         TEMP_BACKUP_NAME = 'temp'
         ''' Backup location '''
         def __init__(self, url, container_subvolume, max_snapshots):
-            self.logger = logging.getLogger(self.__class__.__name__)
+            self.logger = logging.getLogger(self.__class__.__name__)        
             self.url = url
             self.container_subvolume = os.path.join(url.path, container_subvolume)
             self.max_snapshots = max_snapshots
             self.snapshot_names = []
+            self.configuration_filename = os.path.join(self.container_subvolume, '.btrfs-sxbackup')
 
             # Path of subvolume for current backup run
             # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
             self.temp_subvolume = os.path.join(self.container_subvolume, self.TEMP_BACKUP_NAME)
+
+            # Override configuratin params
+            self.configuration = SxBackup.Configuration(self.get_config_type())
+
+        def get_config_type(self):
+            ''' Returns the configuration type, used as section name in configuration file '''
+            return ''
 
         def create_subprocess_args(self, cmd):
             ''' Create command/args array for subprocess, wraps command into ssh call if url host name is not None '''
@@ -59,7 +108,6 @@ class SxBackup:
         def prepare_environment(self):
             ''' Prepare location environment '''
 
-            self.logger.info('Preparing environment [%s]' % (self))
             # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
             subprocess.check_output(self.create_subprocess_args( \
                 'if [ -d %s ] ; then btrfs sub del %s; fi' % (self.temp_subvolume, self.temp_subvolume)))
@@ -68,8 +116,7 @@ class SxBackup:
             ''' Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
             stored internally (self.snapshot_names) and also returned. '''
 
-            self.logger.info('Retrieving snapshot names from [%s] container [%s]' \
-                % (self.url.hostname if self.url.hostname is not None else 'localhost', self.container_subvolume))
+            self.logger.info('Retrieving snapshot names from [%s]' % (self.__class__.__name__)) 
             output = subprocess.check_output(self.create_subprocess_args('btrfs sub list -o %s' % (self.container_subvolume)))
             # output is delivered as a byte sequence, decode to unicode string and split lines
             lines = output.decode().splitlines()
@@ -83,12 +130,31 @@ class SxBackup:
             return self.snapshot_names
 
         def cleanup_snapshots(self):
-            # Clean out excess backups/snapshots
+            ''' Clean out excess backups/snapshots '''
+
             if len(self.snapshot_names) > self.max_snapshots:
                 remove_count = len(self.snapshot_names) - self.max_snapshots
                 snapshots_to_remove = self.snapshot_names[-remove_count:]
                 self.logger.info('Removing snapshots [%s]' % (", ".join(snapshots_to_remove)))
                 subprocess.check_output(self.create_subprocess_args(self.create_cleanup_bash_command(snapshots_to_remove)))
+
+        def write_configuration(self):
+            ''' Write configuration file to container subvolume '''
+            # Configuration to string
+            str_file = io.StringIO()
+            self.configuration.write(str_file)
+            config_str = str_file.getvalue() 
+            # Write config file to location directory
+            p = subprocess.Popen(self.create_subprocess_args('cat > %s' % (self.configuration_filename)), stdin=subprocess.PIPE)
+            p.communicate(input=bytes(config_str, 'utf-8'))
+
+        def read_configuration(self):
+            ''' Read configuration file from container subvolume '''
+            # Read via cat, ignore errors in case file does not exist
+            p = subprocess.Popen(self.create_subprocess_args('cat %s' % (self.configuration_filename)), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (out, err) = p.communicate()
+            # Parse config
+            self.configuration.read(out.decode().splitlines())
 
         def __str__(self):
             return 'Url [%s] snapshot container subvolume [%s]' % \
@@ -96,6 +162,9 @@ class SxBackup:
 
     class SourceLocation(Location):
         ''' Source location '''
+
+        def get_config_type(self):
+            return 'Source'
 
         def prepare_environment(self):
             ''' Prepares source environment '''
@@ -113,12 +182,16 @@ class SxBackup:
             subprocess.check_output(self.create_subprocess_args( \
                 'btrfs sub snap -r %s %s && sync' % (self.url.path, self.temp_subvolume)))
 
+    class DestinationLocation(Location):
+        def get_config_type(self):
+            return 'Destination'
+
     def __init__(self, source_url, source_container_subvolume, source_max_snapshots, dest_url, dest_max_snapshots):
         ''' c'tor '''
         self.__logger = logging.getLogger(self.__class__.__name__)
 
         self.source = SxBackup.SourceLocation(source_url, source_container_subvolume, source_max_snapshots)
-        self.dest = SxBackup.Location(dest_url, "", dest_max_snapshots)
+        self.dest = SxBackup.DestinationLocation(dest_url, "", dest_max_snapshots)
 
     def __create_snapshot_name(self):
         ''' Create formatted snapshot name '''
@@ -126,18 +199,33 @@ class SxBackup:
 
     def __does_command_exist(self, url, command):
         ''' Verifies existence of a shell command '''
-        hash_cmd = ['type ' + command]
+        type_cmd = ['type ' + command]
         if url is not None:
-            hash_cmd = self.__create_subprocess_args(url, hash_cmd)
+            type_cmd = self.__create_subprocess_args(url, type_cmd)
 
-        hash_prc = subprocess.Popen(hash_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        return hash_prc.wait() == 0
+        type_prc = subprocess.Popen(type_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        return type_prc.wait() == 0
 
     def run(self):
         ''' Performs backup run '''
 
+        # Read global configuration
+        config = SxBackup.Configuration('Global')
+        if os.path.exists(SxBackup.CONFIG_FILENAME):
+            config.read(open(SxBackup.CONFIG_FILENAME))
+
+        # Preprare environments
+        self.__logger.info('Preparing environment')
         self.source.prepare_environment()
         self.dest.prepare_environment()
+
+        # Read location configurations
+        self.source.read_configuration()
+        self.dest.read_configuration()
+        # Update configuration parameters with current settings for this backup (both ways)
+        self.source.configuration.source = self.dest.configuration.source = self.source.url.geturl()
+        self.source.configuration.source_container = self.dest.configuration.source_container = self.source.container_subvolume
+        self.source.configuration.destination = self.dest.configuration.destination = self.dest.url.geturl()
 
         # Retrieve snapshot names of both source and destination 
         self.source.retrieve_snapshot_names()
@@ -213,6 +301,9 @@ class SxBackup:
         # Clean out excess backups/snapshots
         self.source.cleanup_snapshots()
         self.dest.cleanup_snapshots()
+
+        self.source.write_configuration()
+        self.dest.write_configuration()
 
         self.__logger.info('Backup [%s] created successfully' % (new_snapshot_name))
 
