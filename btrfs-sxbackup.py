@@ -24,27 +24,102 @@ from urllib import parse
 app_name = os.path.splitext(os.path.basename(__file__))[0]
 
 class SxBackup:
-    TEMP_BACKUP_NAME = 'temp'
+    ''' Backup '''
+
+    class Error(Exception):
+        pass
+
+    class Location:
+        TEMP_BACKUP_NAME = 'temp'
+        ''' Backup location '''
+        def __init__(self, url, container_subvolume, max_snapshots):
+            self.logger = logging.getLogger(self.__class__.__name__)
+            self.url = url
+            self.container_subvolume = os.path.join(url.path, container_subvolume)
+            self.max_snapshots = max_snapshots
+            self.snapshot_names = []
+
+            # Path of subvolume for current backup run
+            # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
+            self.temp_subvolume = os.path.join(self.container_subvolume, self.TEMP_BACKUP_NAME)
+
+        def create_subprocess_args(self, cmd):
+            ''' Create command/args array for subprocess, wraps command into ssh call if url host name is not None '''
+            # in case cmd is a regular value, convert to list
+            cmd = cmd if cmd is list else [cmd]
+            # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
+            return ['bash', '-c'] + cmd if self.url.hostname == None else \
+                ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (self.url.username, self.url.hostname)] + cmd
+                
+        def create_cleanup_bash_command(self, snapshot_names):
+            ''' Creates bash comand string to remove multiple snapshots within a btrfs subvolume '''
+
+            return " && ".join(map(lambda x: 'btrfs sub del %s' % (os.path.join(self.container_subvolume, x)), snapshot_names))
+
+        def prepare_environment(self):
+            ''' Prepare location environment '''
+
+            self.logger.info('Preparing environment [%s]' % (self))
+            # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
+            subprocess.check_output(self.create_subprocess_args( \
+                'if [ -d %s ] ; then btrfs sub del %s; fi' % (self.temp_subvolume, self.temp_subvolume)))
+
+        def retrieve_snapshot_names(self):
+            ''' Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
+            stored internally (self.snapshot_names) and also returned. '''
+
+            self.logger.info('Retrieving snapshot names from [%s] container [%s]' \
+                % (self.url.hostname if self.url.hostname is not None else 'localhost', self.container_subvolume))
+            output = subprocess.check_output(self.create_subprocess_args('ls -1 %s' % (self.container_subvolume)))
+            # output is delivered as a byte sequence, decode to unicode string and split lines
+            lines = output.decode().splitlines()
+            self.snapshot_names = sorted(lines, reverse=True)
+            return self.snapshot_names
+
+        def cleanup_snapshots(self):
+            # Clean out excess backups/snapshots
+            if len(self.snapshot_names) > self.max_snapshots:
+                remove_count = len(self.snapshot_names) - self.max_snapshots
+                snapshots_to_remove = self.snapshot_names[-remove_count:]
+                self.logger.info('Removing snapshots [%s]' % (", ".join(snapshots_to_remove)))
+                subprocess.check_output(self.create_subprocess_args(self.create_cleanup_bash_command(snapshots_to_remove)))
+
+        def __str__(self):
+            return 'Url [%s] snapshot container subvolume [%s]' % \
+                (self.url.geturl(), self.container_subvolume)
+
+    class SourceLocation(Location):
+        ''' Source location '''
+
+        def prepare_environment(self):
+            ''' Prepares source environment '''
+            # Source specific preparation, check and create source snapshot volume if required
+            subprocess.check_output(self.create_subprocess_args(
+                'if [ ! -d %s ] ; then btrfs sub create %s; fi' % (self.container_subvolume, self.container_subvolume)))
+
+            # Generic location preparation
+            super().prepare_environment()
+
+        def create_snapshot(self):
+            ''' Creates a new (temporary) snapshot within container subvolume '''
+            # Create new temporary snapshot (source)
+            self.logger.info('Creating source snapshot')
+            subprocess.check_output(self.create_subprocess_args( \
+                'btrfs sub snap -r %s %s && sync' % (self.url.path, self.temp_subvolume)))
 
     def __init__(self, source_url, source_container_subvolume, source_max_snapshots, dest_url, dest_max_snapshots):
         ''' c'tor '''
         self.__logger = logging.getLogger(self.__class__.__name__)
 
-        self.source_url = source_url
-        self.source_container_subvolume = source_container_subvolume
-        self.source_max_snapshots = source_max_snapshots
-        self.dest_url = dest_url
-        self.dest_max_snapshots = dest_max_snapshots
+        self.source = SxBackup.SourceLocation(source_url, source_container_subvolume, source_max_snapshots)
+        self.dest = SxBackup.Location(dest_url, "", dest_max_snapshots)
 
-    def __create_subprocess_args(self, url, cmd):
-        ''' Create command/args array for subprocess, wraps command into ssh call if url host name is not None '''
-        # in case cmd is a regular value, convert to list
-        cmd = cmd if cmd is list else [cmd]
-        # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
-        return ['bash', '-c'] + cmd if url.hostname == None else \
-            ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (url.username, url.hostname)] + cmd
+    def __create_snapshot_name(self):
+        ''' Create formatted snapshot name '''
+        return datetime.utcnow().strftime('%Y%m%d-%H%M%S-UTC')
 
     def __does_command_exist(self, url, command):
+        ''' Verifies existence of a shell command '''
         hash_cmd = ['type ' + command]
         if url is not None:
             hash_cmd = self.__create_subprocess_args(url, hash_cmd)
@@ -52,83 +127,45 @@ class SxBackup:
         hash_prc = subprocess.Popen(hash_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         return hash_prc.wait() == 0
 
-    def __create_snapshot_name(self):
-        ''' Create formatted snapshot name '''
-        return datetime.utcnow().strftime('%Y%m%d-%H%M%S-UTC')
-
-    def __create_cleanup_bash_command(self, container_subvolume, snapshot_names):
-        ''' Creates bash comand string to remove multiple snapshots within a btrfs subvolume '''
-        return " && ".join(map(lambda x: 'btrfs sub del %s' % (os.path.join(container_subvolume, x)), snapshot_names))
-
-    def __retrieve_snapshot_names(self, url, container_subvolume):
-        ''' Determine snapshot names. Snapshot names returned are sorted in reverse order (newest first) '''
-
-        self.__logger.info('Retrieving snapshot names from [%s] container [%s]' % (url.hostname if url.hostname is not None else 'localhost', container_subvolume))
-        output = subprocess.check_output(self.__create_subprocess_args(url, 'ls -1 %s' % (container_subvolume)))
-        # output is delivered as a byte sequence, decode to unicode string and split lines
-        lines = output.decode().splitlines()
-        return sorted(lines, reverse=True)
-
-    def __snapshots_to_remove(self, snapshot_names, max_count):
-        ''' Determine snapshots to remove from a list of snapshot names, given maximum count.
-        Returns a trimmed list of snapshots '''
-
-        remove_count = len(snapshot_names) - max_count
-        return snapshot_names[-remove_count:]
-
     def run(self):
         ''' Performs backup run '''
 
-        self.__logger.info('Preparing source and destination environment')
-        # Check for and create source snapshot volume if required
-        subprocess.check_output(self.__create_subprocess_args(self.source_url, \
-            'if [ ! -d %s ] ; then btrfs sub create %s; fi' % (self.source_container_subvolume, self.source_container_subvolume)))
+        self.source.prepare_environment()
+        self.dest.prepare_environment()
 
-        # Paths for subvolumes of current backup run
-        # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
-        source_temp_subvolume = os.path.join(self.source_container_subvolume, self.TEMP_BACKUP_NAME)
-        dest_temp_subvolume = os.path.join(self.dest_url.path, self.TEMP_BACKUP_NAME)
-
-        # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
-        subprocess.check_output(self.__create_subprocess_args(self.source_url, \
-            'if [ -d %s ] ; then btrfs sub del %s; fi' % (source_temp_subvolume, source_temp_subvolume)))
-
-        subprocess.check_output(self.__create_subprocess_args(self.dest_url, \
-            'if [ -d %s ] ; then btrfs sub del %s; fi' % (dest_temp_subvolume, dest_temp_subvolume)))
-
-        # Retrieve source snapshots and print
-        source_snapshot_names = self.__retrieve_snapshot_names(self.source_url, self.source_container_subvolume)
-        dest_snapshot_names = self.__retrieve_snapshot_names(self.dest_url, self.dest_url.path)
+        # Retrieve snapshot names of both source and destination 
+        self.source.retrieve_snapshot_names()
+        self.dest.retrieve_snapshot_names()
 
         new_snapshot_name = self.__create_snapshot_name()
+        if len(self.source.snapshot_names) > 0 and new_snapshot_name <= self.source.snapshot_names[0]:
+            raise SxBackup.Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] which may indicate a system time problem' \
+                % (new_snapshot_name, self.source.snapshot_names[0]))
 
-        # Create new temporary snapshot (source)
-        self.__logger.info('Creating source snapshot')
-        subprocess.check_output(self.__create_subprocess_args(self.source_url, \
-            'btrfs sub snap -r %s %s && sync' % (self.source_url.path, source_temp_subvolume)))
+        # Create source snapshot
+        self.source.create_snapshot()
 
         # Transfer temporary snapshot
         self.__logger.info('Sending snapshot')
 
         # btrfs send command/subprocess
-        send_command = ''
-        if len(source_snapshot_names) == 0:
-            send_command = self.__create_subprocess_args(self.source_url, \
-                'btrfs send %s' % (source_temp_subvolume))
+        send_command = None
+        if len(self.source.snapshot_names) == 0:
+            send_command = self.source.create_subprocess_args( \
+                'btrfs send %s' % (self.source.temp_subvolume))
         else:
-            send_command = self.__create_subprocess_args(self.source_url, \
-                'btrfs send -p %s %s' % (os.path.join(self.source_container_subvolume, source_snapshot_names[0]), source_temp_subvolume))
+            send_command = self.source.create_subprocess_args( \
+                'btrfs send -p %s %s' % (os.path.join(self.source.container_subvolume, self.source.snapshot_names[0]), self.source.temp_subvolume))
         send_process = subprocess.Popen(send_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # pv command/subprocess for progress indication
         pv_process = None 
         if self.__does_command_exist(None, 'pv'):
-            pv_command = ['pv']
-            pv_process = subprocess.Popen(pv_command, stdin=send_process.stdout, stdout=subprocess.PIPE)
+            pv_process = subprocess.Popen(['pv'], stdin=send_process.stdout, stdout=subprocess.PIPE)
 
         # btrfs receive command/subprocess
-        receive_command = self.__create_subprocess_args(self.dest_url, \
-            'btrfs receive %s' % (self.dest_url.path))
+        receive_command = self.dest.create_subprocess_args( \
+            'btrfs receive %s' % (self.dest.url.path))
         receive_process = subprocess.Popen(receive_command, stdin=pv_process.stdout if pv_process is not None else send_process.stdout, stdout=subprocess.PIPE)
 
         receive_returncode = None
@@ -158,35 +195,24 @@ class SxBackup:
 
         # After successful transmission, rename source and destinationside snapshot subvolumes (from pending to timestamp-based name)
         self.__logger.info('Finalizing backup')
-        subprocess.check_output(self.__create_subprocess_args(self.source_url, \
-            'mv %s %s' % (source_temp_subvolume, os.path.join(self.source_container_subvolume, new_snapshot_name))))
-        subprocess.check_output(self.__create_subprocess_args(self.dest_url, \
-            'mv %s %s' % (dest_temp_subvolume, os.path.join(self.dest_url.path, new_snapshot_name))))
+        subprocess.check_output(self.source.create_subprocess_args( \
+            'mv %s %s' % (self.source.temp_subvolume, os.path.join(self.source.container_subvolume, new_snapshot_name))))
+        subprocess.check_output(self.dest.create_subprocess_args( \
+            'mv %s %s' % (self.dest.temp_subvolume, os.path.join(self.dest.url.path, new_snapshot_name))))
 
         # Update snapshot name lists
-        source_snapshot_names = [new_snapshot_name] + source_snapshot_names
-        dest_snapshot_names = [new_snapshot_name] + dest_snapshot_names
+        self.source.snapshot_names = [new_snapshot_name] + self.source.snapshot_names
+        self.dest.snapshot_names = [new_snapshot_name] + self.dest.snapshot_names
 
         # Clean out excess backups/snapshots
-        if len(source_snapshot_names) > self.source_max_snapshots:
-            snapshots_to_remove = self.__snapshots_to_remove(source_snapshot_names, self.source_max_snapshots)
-            self.__logger.info('Removing source snapshots [%s]' % (", ".join(snapshots_to_remove)))
-
-            command = self.__create_cleanup_bash_command(self.source_container_subvolume, snapshots_to_remove)
-            subprocess.check_output(self.__create_subprocess_args(self.source_url, command))
-
-        if len(dest_snapshot_names) > self.dest_max_snapshots:
-            snapshots_to_remove = self.__snapshots_to_remove(dest_snapshot_names, self.dest_max_snapshots)
-            self.__logger.info('Removing destination snapshots [%s]' % (", ".join(snapshots_to_remove)))
-
-            command = self.__create_cleanup_bash_command(self.dest_url.path, snapshots_to_remove)
-            subprocess.check_output(self.__create_subprocess_args(self.dest_url, command))
+        self.source.cleanup_snapshots()
+        self.dest.cleanup_snapshots()
 
         self.__logger.info('Backup [%s] created successfully' % (new_snapshot_name))
 
     def __str__(self):
-        return 'Source [%s] snapshot container subvolume [%s] Destination [%s]' % \
-            (self.source_url.geturl(), self.source_container_subvolume, self.dest_url.geturl())
+        return 'Source %s \nDestiation %s' % \
+            (self.source, self.dest)
 
 
 # Initialize logging
