@@ -70,9 +70,15 @@ class SxBackup:
 
             self.logger.info('Retrieving snapshot names from [%s] container [%s]' \
                 % (self.url.hostname if self.url.hostname is not None else 'localhost', self.container_subvolume))
-            output = subprocess.check_output(self.create_subprocess_args('ls -1 %s' % (self.container_subvolume)))
+            output = subprocess.check_output(self.create_subprocess_args('btrfs sub list -o %s' % (self.container_subvolume)))
             # output is delivered as a byte sequence, decode to unicode string and split lines
             lines = output.decode().splitlines()
+            # extract snapshot names from btrfs sub list lines
+            def strip_name(l):
+                i = l.rfind(os.path.sep)
+                return l[i+1:] if i >= 0 else l
+            lines = map(lambda x: strip_name(x), lines)
+            # sort and return
             self.snapshot_names = sorted(lines, reverse=True)
             return self.snapshot_names
 
