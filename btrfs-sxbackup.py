@@ -40,7 +40,7 @@ class SxBackup:
             self.source = None
             self.source_container = None
             self.destination = None
-            self.keep = None
+            self.keep = '1w > 2/d, 2w > daily, 1m > weekly, 2m > none'
 
         def read(self, fileobject):
             parser = ConfigParser()
@@ -50,7 +50,7 @@ class SxBackup:
             self.source = parser.get(section, 'source', fallback=None)
             self.source_container = parser.get(section, 'source-container', fallback=None)
             self.destination = parser.get(section, 'destination', fallback=None)
-            self.keep = parser.get(section, 'keep', fallback=None)
+            self.keep = parser.get(section, 'keep', fallback=self.keep)
 
         def write(self, fileobject):
             parser = ConfigParser()
@@ -92,12 +92,15 @@ class SxBackup:
             ''' Returns the configuration type, used as section name in configuration file '''
             return ''
 
+        def is_remote(self):
+            return self.url.hostname is not None
+
         def create_subprocess_args(self, cmd):
             ''' Create command/args array for subprocess, wraps command into ssh call if url host name is not None '''
             # in case cmd is a regular value, convert to list
             cmd = cmd if cmd is list else [cmd]
             # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
-            return ['bash', '-c'] + cmd if self.url.hostname == None else \
+            return ['bash', '-c'] + cmd if self.url.hostname is None else \
                 ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (self.url.username, self.url.hostname)] + cmd
                 
         def create_cleanup_bash_command(self, snapshot_names):
@@ -222,10 +225,16 @@ class SxBackup:
         # Read location configurations
         self.source.read_configuration()
         self.dest.read_configuration()
+
         # Update configuration parameters with current settings for this backup (both ways)
-        self.source.configuration.source = self.dest.configuration.source = self.source.url.geturl()
-        self.source.configuration.source_container = self.dest.configuration.source_container = self.source.container_subvolume
-        self.source.configuration.destination = self.dest.configuration.destination = self.dest.url.geturl()
+        both_remote_or_local = not (self.source.is_remote() ^ self.dest.is_remote())
+        self.source.configuration.source = self.source.url.geturl() if both_remote_or_local else None
+        self.source.configuration.source_container = self.source.container_subvolume if both_remote_or_local else None
+        self.source.configuration.destination = self.dest.url.geturl() if self.dest.is_remote() or both_remote_or_local else None
+
+        self.dest.configuration.source = self.source.url.geturl() if self.source.is_remote() or both_remote_or_local else None
+        self.dest.configuration.source_container = self.source.container_subvolume if self.source.is_remote() or both_remote_or_local else None
+        self.dest.configuration.destination = self.dest.url.geturl() if both_remote_or_local else None
 
         # Retrieve snapshot names of both source and destination 
         self.source.retrieve_snapshot_names()
