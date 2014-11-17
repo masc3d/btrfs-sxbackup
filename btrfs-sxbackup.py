@@ -198,7 +198,7 @@ class SxBackup:
 
     def __create_snapshot_name(self):
         ''' Create formatted snapshot name '''
-        return datetime.utcnow().strftime('%Y%m%d-%H%M%S-UTC')
+        return datetime.utcnow().strftime('sx-%Y%m%d-%H%M%S-utc')
 
     def __does_command_exist(self, url, command):
         ''' Verifies existence of a shell command '''
