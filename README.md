@@ -43,10 +43,10 @@ optional arguments:
 
 ## Examples ##
 ```
-btrfs-sxbackup.py ssh://root@myhost/ /backup/myhost
+btrfs-sxbackup.py ssh://root@myhost.org:/ /backup/myhost
 ```
-Pulls snapshot backups of ___/___ on remote host ___myhost___ to local subvolume ___/backup/myhost___
+Pulls snapshot backups of ___/___ on remote host ___myhost.org___ to local subvolume ___/backup/myhost___
 ```
-btrfs-sxbackup.py / ssh://root@mybackupserver/backup/myhost
+btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
 ```
-Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver___
+Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver.org___
