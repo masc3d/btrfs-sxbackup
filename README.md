@@ -5,10 +5,10 @@ Btrfs snapshot backup utility with push/pull support via SSH
 
 ```
 btrfs-sxbackup.py --help
-btrfs-sxbackup.py v0.2.5 by masc
+btrfs-sxbackup v0.3.0 by masc
 usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
                          [-dm DESTINATION_MAX_SNAPSHOTS]
-                         [-ss SOURCE_CONTAINER_SUBVOLUME]
+                         [-ss SOURCE_CONTAINER_SUBVOLUME] [-c]
                          source_subvolume destination_container_subvolume
 
 positional arguments:
@@ -29,14 +29,20 @@ optional arguments:
                         Override path to source snapshot container subvolume.
                         Both absolute and relative paths are possible.
                         (defaults to 'sxbackup', relative to source subvolume)
+  -c, --compress        Enables compression, requires lzop to be installed on
+                        both source and destination
 ```
 
 ## Dependencies ##
+#### Required ####
+The following packages have to be available on both source and destination
 * python3
 * btrfs-progs
-* bash
-* pv (optional, provides progress indication if installed)
-* ssh (when pushing/pulling, not required for local operation)
+
+#### Optional ####
+* ssh (for remote push/pull, not required for local operation)
+* lzop (for compression support if desired)
+* pv (provides progress indication if installed)
 
 ## Setup ##
 * when using ssh, public/private key authentication should be set up
