@@ -360,8 +360,8 @@ parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sx
                      are possible. (defaults to \'sxbackup\', relative to source subvolume)')
 parser.add_argument('-c', '--compress', action='store_true',
                     help='Enables compression, requires lzop to be installed on both source and destination')
-parser.add_argument('-si', '--syslog-ident', dest='syslog_ident', type=str, default=app_name,
-                    help='Set Syslog ident, default to script name')
+parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=app_name,
+                    help='Log ident used for syslog logging, defaults to script name')
 parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
                     help='Do not log to STDOUT')
 args = parser.parse_args()
@@ -372,7 +372,7 @@ if not args.quiet:
     logger.addHandler(logging.StreamHandler(sys.stdout))
 log_syslog_handler = logging.handlers.SysLogHandler('/dev/log')
 log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(message)s'))
-log_syslog_handler.ident = args.syslog_ident+' '
+log_syslog_handler.ident = args.log_ident+' '
 logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
 logger.info('%s v%s by %s' % (app_name, __version__, __author__))
