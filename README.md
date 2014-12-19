@@ -11,7 +11,8 @@ btrfs-sxbackup.py --help
 btrfs-sxbackup v0.3.0 by masc
 usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
                          [-dm DESTINATION_MAX_SNAPSHOTS]
-                         [-ss SOURCE_CONTAINER_SUBVOLUME] [-c]
+                         [-ss SOURCE_CONTAINER_SUBVOLUME] [-c] [-li LOG_IDENT]
+                         [-q]
                          source_subvolume destination_container_subvolume
 
 positional arguments:
@@ -34,16 +35,19 @@ optional arguments:
                         (defaults to 'sxbackup', relative to source subvolume)
   -c, --compress        Enables compression, requires lzop to be installed on
                         both source and destination
-  -si SYSLOG_IDENT, --syslog-ident SYSLOG_IDENT
-                        Set Syslog ident, default to script name
+  -li LOG_IDENT, --log-ident LOG_IDENT
+                        Log ident used for syslog logging, defaults to script
+                        name
   -q, --quiet           Do not log to STDOUT
 ```
 
 ## Dependencies ##
 #### Required ####
 The following packages have to be available on both source and destination
-* python3
 * btrfs-progs
+
+The system executing btrfs-backup requires
+* python3
 
 #### Optional ####
 * ssh (for remote push/pull, not required for local operation)
