@@ -34,6 +34,9 @@ optional arguments:
                         (defaults to 'sxbackup', relative to source subvolume)
   -c, --compress        Enables compression, requires lzop to be installed on
                         both source and destination
+  -si SYSLOG_IDENT, --syslog-ident SYSLOG_IDENT
+                        Set Syslog ident, default to script name
+  -q, --quiet           Do not log to STDOUT
 ```
 
 ## Dependencies ##

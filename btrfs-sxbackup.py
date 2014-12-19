@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 __version__ = '0.3.0'
-__author__ = 'masc'
+__author__ = 'Marco Schindler, Bernd Michael Helm'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'
 __license__ = 'GPL'
@@ -23,8 +23,6 @@ from argparse import ArgumentParser
 from configparser import ConfigParser
 from datetime import datetime
 from urllib import parse
-
-app_name = os.path.splitext(os.path.basename(__file__))[0]
 
 class SxBackup:
     ''' Backup '''
@@ -84,6 +82,7 @@ class SxBackup:
 
             # Override configuratin params
             self.configuration = SxBackup.Configuration(self.get_config_type())
+
 
         def get_config_type(self):
             ''' Returns the configuration type, used as section name in configuration file '''
@@ -147,7 +146,8 @@ class SxBackup:
                 remove_count = len(self.snapshot_names) - self.max_snapshots
                 snapshots_to_remove = self.snapshot_names[-remove_count:]
                 #self.log_info('Removing snapshots [%s]' % (", ".join(snapshots_to_remove)))
-                self.log_info('Removing snapshots %s' % (snapshots_to_remove))
+                self.log_info('Removing %d of %d snapshots (because >%d): %s'
+                              % (remove_count, len(self.snapshot_names), self.max_snapshots, snapshots_to_remove))
                 subprocess.check_output(self.create_subprocess_args(self.create_cleanup_bash_command(snapshots_to_remove)))
 
         def write_configuration(self):
@@ -226,6 +226,7 @@ class SxBackup:
         self.__logger.info(self.source)
         self.__logger.info(self.dest)
 
+        startingTime = time.monotonic()
         # Read global configuration
         config = SxBackup.Configuration('Global')
         if os.path.exists(SxBackup.CONFIG_FILENAME):
@@ -334,34 +335,39 @@ class SxBackup:
         self.source.write_configuration()
         self.dest.write_configuration()
 
-        self.__logger.info('Backup %s created successfully' % (new_snapshot_name))
+        self.__logger.info('Backup %s created successfully in %s' % (new_snapshot_name, time.strftime("%H:%M:%S", time.gmtime(time.monotonic()-startingTime))))
 
     def __str__(self):
         return 'Source %s \nDestiation %s' % \
             (self.source, self.dest)
 
 
+app_name = os.path.splitext(os.path.basename(__file__))[0]
+
+# Parse arguments
+parser = ArgumentParser()
+parser.add_argument('source_subvolume', type=str, help='Source subvolume to backup. Local path or SSH url.')
+parser.add_argument('destination_container_subvolume', type=str, help='Destination subvolume receiving snapshots. Local path or SSH url.')
+parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
+parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
+parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. (defaults to \'sxbackup\', relative to source subvolume)')
+parser.add_argument('-c', '--compress', action='store_true', help='Enables compression, requires lzop to be installed on both source and destination')
+parser.add_argument('-si', '--syslog-ident', dest='syslog_ident', type=str, default=app_name, help='Set Syslog ident, default to script name')
+parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False, help='Do not log to STDOUT')
+args = parser.parse_args()
+
 # Initialize logging
 logger = logging.getLogger()
-logger.addHandler(logging.StreamHandler(sys.stdout))
+if not args.quiet:
+    logger.addHandler(logging.StreamHandler(sys.stdout))
 log_syslog_handler = logging.handlers.SysLogHandler('/dev/log')
 log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(message)s'))
+log_syslog_handler.ident = args.syslog_ident+' '
 logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
-
-logger.info('%s v%s by %s' % (app_name, __version__, __author__))
+logger.info('%s v%s by %s' % (app_name , __version__, __author__))
 
 try:
-    # Parse arguments
-    parser = ArgumentParser()
-    parser.add_argument('source_subvolume', type=str, help='Source subvolume to backup. Local path or SSH url.')
-    parser.add_argument('destination_container_subvolume', type=str, help='Destination subvolume receiving snapshots. Local path or SSH url.')
-    parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
-    parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
-    parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. (defaults to \'sxbackup\', relative to source subvolume)')
-    parser.add_argument('-c', '--compress', action='store_true', help='Enables compression, requires lzop to be installed on both source and destination')
-    args = parser.parse_args()
-
     source_url = parse.urlsplit(args.source_subvolume)
     dest_url = parse.urlsplit(args.destination_container_subvolume)
     source_container_subvolume = args.source_container_subvolume if args.source_container_subvolume[0] == os.pathsep else os.path.join(source_url.path, args.source_container_subvolume)
@@ -385,4 +391,3 @@ except:
     raise
 
 exit(0)
-
