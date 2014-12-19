@@ -41,29 +41,29 @@ class SxBackup:
             self.keep = '1w > 2/d, 2w > daily, 1m > weekly, 2m > none'
 
         def read(self, fileobject):
-            parser = ConfigParser()
-            parser.read_file(fileobject)
+            cparser = ConfigParser()
+            cparser.read_file(fileobject)
 
             section = self.config_type
-            self.source = parser.get(section, 'source', fallback=None)
-            self.source_container = parser.get(section, 'source-container', fallback=None)
-            self.destination = parser.get(section, 'destination', fallback=None)
-            self.keep = parser.get(section, 'keep', fallback=self.keep)
+            self.source = cparser.get(section, 'source', fallback=None)
+            self.source_container = cparser.get(section, 'source-container', fallback=None)
+            self.destination = cparser.get(section, 'destination', fallback=None)
+            self.keep = cparser.get(section, 'keep', fallback=self.keep)
 
         def write(self, fileobject):
-            parser = ConfigParser()
+            cparser = ConfigParser()
 
             section = self.config_type
-            parser.add_section(section)
+            cparser.add_section(section)
             if self.source is not None:
-                parser.set(section, 'source', self.source)
+                cparser.set(section, 'source', self.source)
             if self.source_container is not None:
-                parser.set(section, 'source-container', self.source_container)
+                cparser.set(section, 'source-container', self.source_container)
             if self.destination is not None:
-                parser.set(section, 'destination', self.destination)
+                cparser.set(section, 'destination', self.destination)
             if self.keep is not None:
-                parser.set(section, 'keep', self.keep)
-            parser.write(fileobject)
+                cparser.set(section, 'keep', self.keep)
+            cparser.write(fileobject)
 
     class Location:
         TEMP_BACKUP_NAME = 'temp'
@@ -80,7 +80,7 @@ class SxBackup:
             # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
             self.temp_subvolume = os.path.join(self.container_subvolume, self.TEMP_BACKUP_NAME)
 
-            # Override configuratin params
+            # Override configuration params
             self.configuration = SxBackup.Configuration(self.get_config_type())
 
         def get_config_type(self):
@@ -105,7 +105,8 @@ class SxBackup:
             cmd = cmd if cmd is list else [cmd]
             # wrap into bash or ssh command respectively, depending if command is executed locally (host==None) or remotely
             subprocess_args = ['bash', '-c'] + cmd if self.url.hostname is None else \
-                ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s' % (self.url.username, self.url.hostname)] + cmd
+                ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s'
+                 % (self.url.username, self.url.hostname)] + cmd
             self.log_debug(subprocess_args)
             return subprocess_args
                 
@@ -118,7 +119,7 @@ class SxBackup:
             ''' Prepare location environment '''
 
             # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
-            subprocess.check_output(self.create_subprocess_args( \
+            subprocess.check_output(self.create_subprocess_args(
                 'if [ -d %s ] ; then btrfs sub del %s; fi' % (self.temp_subvolume, self.temp_subvolume)))
 
         def retrieve_snapshot_names(self):
@@ -144,7 +145,7 @@ class SxBackup:
             if len(self.snapshot_names) > self.max_snapshots:
                 remove_count = len(self.snapshot_names) - self.max_snapshots
                 snapshots_to_remove = self.snapshot_names[-remove_count:]
-                #self.log_info('Removing snapshots [%s]' % (", ".join(snapshots_to_remove)))
+                # self.log_info('Removing snapshots [%s]' % (", ".join(snapshots_to_remove)))
                 self.log_info('Removing %d of %d snapshots (because >%d): %s'
                               % (remove_count, len(self.snapshot_names), self.max_snapshots, snapshots_to_remove))
                 subprocess.check_output(self.create_subprocess_args(self.create_cleanup_bash_command(snapshots_to_remove)))
@@ -168,8 +169,8 @@ class SxBackup:
             self.configuration.read(out.decode().splitlines())
 
         def __str__(self):
-            return self.__format_log_msg('Url [%s] snapshot container subvolume [%s]' % \
-                (self.url.geturl(), self.container_subvolume))
+            return self.__format_log_msg('Url [%s] snapshot container subvolume [%s]'
+                                         % (self.url.geturl(), self.container_subvolume))
 
     class SourceLocation(Location):
         ''' Source location '''
@@ -190,7 +191,7 @@ class SxBackup:
             ''' Creates a new (temporary) snapshot within container subvolume '''
             # Create new temporary snapshot (source)
             self.log_info('Creating snapshot')
-            subprocess.check_output(self.create_subprocess_args( \
+            subprocess.check_output(self.create_subprocess_args(
                 'btrfs sub snap -r %s %s && sync' % (self.url.path, self.temp_subvolume)))
 
     class DestinationLocation(Location):
@@ -225,13 +226,13 @@ class SxBackup:
         self.__logger.info(self.source)
         self.__logger.info(self.dest)
 
-        startingTime = time.monotonic()
+        starting_time = time.monotonic()
         # Read global configuration
         config = SxBackup.Configuration('Global')
         if os.path.exists(SxBackup.CONFIG_FILENAME):
             config.read(open(SxBackup.CONFIG_FILENAME))
 
-        # Preprare environments
+        # Prepare environments
         self.__logger.info('Preparing environment')
         self.source.prepare_environment()
         self.dest.prepare_environment()
@@ -256,8 +257,9 @@ class SxBackup:
 
         new_snapshot_name = self.__create_snapshot_name()
         if len(self.source.snapshot_names) > 0 and new_snapshot_name <= self.source.snapshot_names[0]:
-            raise SxBackup.Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] which may indicate a system time problem' \
-                % (new_snapshot_name, self.source.snapshot_names[0]))
+            raise SxBackup.Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] \
+                                 which may indicate a system time problem'
+                                 % (new_snapshot_name, self.source.snapshot_names[0]))
 
         # Create source snapshot
         self.source.create_snapshot()
@@ -266,7 +268,6 @@ class SxBackup:
         self.__logger.info('Sending snapshot')
 
         # btrfs send command/subprocess
-        send_command = None
         if len(self.source.snapshot_names) == 0:
             send_command_str = 'btrfs send %s' % (self.source.temp_subvolume)
         else:
@@ -318,9 +319,9 @@ class SxBackup:
 
         # After successful transmission, rename source and destinationside snapshot subvolumes (from pending to timestamp-based name)
         self.__logger.info('Finalizing backup')
-        subprocess.check_output(self.source.create_subprocess_args( \
+        subprocess.check_output(self.source.create_subprocess_args(
             'mv %s %s' % (self.source.temp_subvolume, os.path.join(self.source.container_subvolume, new_snapshot_name))))
-        subprocess.check_output(self.dest.create_subprocess_args( \
+        subprocess.check_output(self.dest.create_subprocess_args(
             'mv %s %s' % (self.dest.temp_subvolume, os.path.join(self.dest.url.path, new_snapshot_name))))
 
         # Update snapshot name lists
@@ -334,10 +335,11 @@ class SxBackup:
         self.source.write_configuration()
         self.dest.write_configuration()
 
-        self.__logger.info('Backup %s created successfully in %s' % (new_snapshot_name, time.strftime("%H:%M:%S", time.gmtime(time.monotonic()-startingTime))))
+        self.__logger.info('Backup %s created successfully in %s'
+                           % (new_snapshot_name, time.strftime("%H:%M:%S", time.gmtime(time.monotonic()-starting_time))))
 
     def __str__(self):
-        return 'Source %s \nDestiation %s' % \
+        return 'Source %s \nDestination %s' % \
             (self.source, self.dest)
 
 
@@ -345,14 +347,23 @@ app_name = os.path.splitext(os.path.basename(__file__))[0]
 
 # Parse arguments
 parser = ArgumentParser()
-parser.add_argument('source_subvolume', type=str, help='Source subvolume to backup. Local path or SSH url.')
-parser.add_argument('destination_container_subvolume', type=str, help='Destination subvolume receiving snapshots. Local path or SSH url.')
-parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10, help='Maximum number of source snapshots to keep (defaults to 10).')
-parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10, help='Maximum number of destination snapshots to keep (defaults to 10).')
-parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup', help='Override path to source snapshot container subvolume. Both absolute and relative paths are possible. (defaults to \'sxbackup\', relative to source subvolume)')
-parser.add_argument('-c', '--compress', action='store_true', help='Enables compression, requires lzop to be installed on both source and destination')
-parser.add_argument('-si', '--syslog-ident', dest='syslog_ident', type=str, default=app_name, help='Set Syslog ident, default to script name')
-parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False, help='Do not log to STDOUT')
+parser.add_argument('source_subvolume', type=str,
+                    help='Source subvolume to backup. Local path or SSH url.')
+parser.add_argument('destination_container_subvolume', type=str,
+                    help='Destination subvolume receiving snapshots. Local path or SSH url.')
+parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10,
+                    help='Maximum number of source snapshots to keep (defaults to 10).')
+parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10,
+                    help='Maximum number of destination snapshots to keep (defaults to 10).')
+parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup',
+                    help='Override path to source snapshot container subvolume. Both absolute and relative paths\
+                     are possible. (defaults to \'sxbackup\', relative to source subvolume)')
+parser.add_argument('-c', '--compress', action='store_true',
+                    help='Enables compression, requires lzop to be installed on both source and destination')
+parser.add_argument('-si', '--syslog-ident', dest='syslog_ident', type=str, default=app_name,
+                    help='Set Syslog ident, default to script name')
+parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
+                    help='Do not log to STDOUT')
 args = parser.parse_args()
 
 # Initialize logging
@@ -364,19 +375,22 @@ log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(me
 log_syslog_handler.ident = args.syslog_ident+' '
 logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
-logger.info('%s v%s by %s' % (app_name , __version__, __author__))
+logger.info('%s v%s by %s' % (app_name, __version__, __author__))
 
 try:
     source_url = parse.urlsplit(args.source_subvolume)
     dest_url = parse.urlsplit(args.destination_container_subvolume)
-    source_container_subvolume = args.source_container_subvolume if args.source_container_subvolume[0] == os.pathsep else os.path.join(source_url.path, args.source_container_subvolume)
+    if args.source_container_subvolume[0] == os.pathsep:
+        source_container_subvolume = args.source_container_subvolume
+    else:
+        source_container_subvolume = os.path.join(source_url.path, args.source_container_subvolume)
 
-    sxbackup = SxBackup(\
-        source_url = source_url,\
-        source_container_subvolume = source_container_subvolume,\
-        source_max_snapshots = args.source_max_snapshots,\
-        dest_url = dest_url,\
-        dest_max_snapshots = args.destination_max_snapshots)
+    sxbackup = SxBackup(
+        source_url=source_url,
+        source_container_subvolume=source_container_subvolume,
+        source_max_snapshots=args.source_max_snapshots,
+        dest_url=dest_url,
+        dest_max_snapshots=args.destination_max_snapshots)
 
     sxbackup.compress = args.compress
 
