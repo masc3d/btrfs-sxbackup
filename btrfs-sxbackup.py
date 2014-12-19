@@ -289,7 +289,7 @@ class SxBackup:
             receive_command_str = 'lzop -d | ' + receive_command_str
 
         receive_command = self.dest.create_subprocess_args(receive_command_str)
-        receive_process = subprocess.Popen(receive_command, stdin=pv_process.stdout if pv_process is not None else send_process.stdout, stdout=subprocess.PIPE)
+        receive_process = subprocess.Popen(receive_command, stdin=pv_process.stdout if pv_process is not None else send_process.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         receive_returncode = None
         send_returncode = None
