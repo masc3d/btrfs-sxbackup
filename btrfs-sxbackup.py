@@ -83,7 +83,6 @@ class SxBackup:
             # Override configuratin params
             self.configuration = SxBackup.Configuration(self.get_config_type())
 
-
         def get_config_type(self):
             ''' Returns the configuration type, used as section name in configuration file '''
             return ''
