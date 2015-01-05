@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 __author__ = 'Marco Schindler, Bernd Michael Helm'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'
