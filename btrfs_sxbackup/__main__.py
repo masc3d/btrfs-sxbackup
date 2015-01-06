@@ -8,9 +8,8 @@ import traceback
 from argparse import ArgumentParser
 from urllib import parse
 
-from btrfs_sxbackup import SxBackup
+from btrfs_sxbackup.SxBackup import SxBackup
 from btrfs_sxbackup import __version__
-from btrfs_sxbackup import __author__
 
 app_name = 'btrfs-sxbackup'
 
@@ -45,10 +44,7 @@ log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(me
 log_syslog_handler.ident = args.log_ident+' '
 logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
-logger.info('%s v%s by %s' % (app_name, __version__, __author__))
-
-if args.version:
-    exit(0)
+logger.info('%s v%s' % (app_name, __version__))
 
 try:
     source_url = parse.urlsplit(args.source_subvolume)
