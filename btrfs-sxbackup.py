@@ -125,9 +125,12 @@ class SxBackup:
         def retrieve_snapshot_names(self):
             ''' Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
             stored internally (self.snapshot_names) and also returned. '''
-            subvolpath = os.path.abspath(self.container_subvolume).rstrip(os.path.sep)
+            if not self.is_remote():
+                subvolpath = os.path.abspath(self.container_subvolume).rstrip(os.path.sep)
+            else:
+                subvolpath = self.container_subvolume
             self.log_info('Retrieving snapshot names for %s' % subvolpath)
-            output = subprocess.check_output(self.create_subprocess_args('btrfs sub list -o %s' % (self.container_subvolume)))
+            output = subprocess.check_output(self.create_subprocess_args('btrfs sub list -o %s' % (subvolpath)))
             # output is delivered as a byte sequence, decode to unicode string and split lines
             lines = output.decode().splitlines()
 
@@ -139,7 +142,8 @@ class SxBackup:
                 i = l.rfind(os.path.sep)
                 if i >= 0:
                     folder = l[l.rfind(' ', 0, i):i].strip()
-                    if subvol_path.endswith(folder):
+                    # if it is a relative path or a absolute with the correct ending
+                    if not subvol_path.startswith(os.path.sep) or subvol_path.endswith(folder):
                         return l[i+1:]
                     else:
                         return False
