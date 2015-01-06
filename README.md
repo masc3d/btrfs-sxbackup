@@ -8,7 +8,7 @@ Btrfs snapshot backup utility
 
 ```
 btrfs-sxbackup.py --help
-btrfs-sxbackup v0.3.0 by masc
+btrfs-sxbackup v0.3.2 by masc
 usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
                          [-dm DESTINATION_MAX_SNAPSHOTS]
                          [-ss SOURCE_CONTAINER_SUBVOLUME] [-c] [-li LOG_IDENT]
@@ -53,6 +53,11 @@ The system executing btrfs-backup requires
 * ssh (for remote push/pull, not required for local operation)
 * lzop (for compression support if desired)
 * pv (provides progress indication if installed)
+
+## Installation ##
+```
+pip install <btrfs-sxbackup-archive.tar.gz>
+```
 
 ## Setup ##
 * when using ssh, public/private key authentication should be set up
