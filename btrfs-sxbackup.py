@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 __author__ = 'Marco Schindler, Bernd Michael Helm'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'
@@ -125,18 +125,39 @@ class SxBackup:
         def retrieve_snapshot_names(self):
             ''' Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
             stored internally (self.snapshot_names) and also returned. '''
-
-            self.log_info('Retrieving snapshot names')
-            output = subprocess.check_output(self.create_subprocess_args('btrfs sub list -o %s' % (self.container_subvolume)))
+            if not self.is_remote():
+                subvolpath = os.path.abspath(self.container_subvolume).rstrip(os.path.sep)
+            else:
+                subvolpath = self.container_subvolume
+            self.log_info('Retrieving snapshot names for %s' % subvolpath)
+            output = subprocess.check_output(self.create_subprocess_args('btrfs sub list -o %s' % (subvolpath)))
             # output is delivered as a byte sequence, decode to unicode string and split lines
             lines = output.decode().splitlines()
+
             # extract snapshot names from btrfs sub list lines
-            def strip_name(l):
+            # this also takes the full path of the subvolume to validate that the snapshots returned by
+            # btrfs subvol list are really within the expected path.
+            # this is possibly a bug in btrfs v3.17 subvol list, kernel 3.18 or due to a bad written btrfs manual page.
+            def strip_name(l, subvol_path):
                 i = l.rfind(os.path.sep)
-                return l[i+1:] if i >= 0 else l
-            lines = map(lambda x: strip_name(x), lines)
+                if i >= 0:
+                    folder = l[l.rfind(' ', 0, i):i].strip()
+                    # if it is a relative path or a absolute with the correct ending
+                    if not subvol_path.startswith(os.path.sep) or subvol_path.endswith(folder):
+                        return l[i+1:]
+                    else:
+                        return False
+                else:
+                    return l
+
+            self.snapshot_names = []
+            # container_subvolume can be both absolute or relative path depending on user input, so make it absolute
+            for line in lines:
+                result = strip_name(line, subvolpath)
+                if result:
+                    self.snapshot_names.append(result)
             # sort and return
-            self.snapshot_names = sorted(lines, reverse=True)
+            self.snapshot_names = sorted(self.snapshot_names, reverse=True)
             return self.snapshot_names
 
         def cleanup_snapshots(self):

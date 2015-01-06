@@ -8,7 +8,7 @@ Btrfs snapshot backup utility
 
 ```
 btrfs-sxbackup.py --help
-btrfs-sxbackup v0.3.0 by masc
+btrfs-sxbackup v0.3.1 by masc
 usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
                          [-dm DESTINATION_MAX_SNAPSHOTS]
                          [-ss SOURCE_CONTAINER_SUBVOLUME] [-c] [-li LOG_IDENT]
