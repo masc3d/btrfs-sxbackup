@@ -38,13 +38,11 @@ btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
 Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver.org___
 
 ```
-btrfs-sxbackup.py --help
-btrfs-sxbackup v0.3.2 by masc
-usage: btrfs-sxbackup.py [-h] [-sm SOURCE_MAX_SNAPSHOTS]
-                         [-dm DESTINATION_MAX_SNAPSHOTS]
-                         [-ss SOURCE_CONTAINER_SUBVOLUME] [-c] [-li LOG_IDENT]
-                         [-q]
-                         source_subvolume destination_container_subvolume
+usage: btrfs-sxbackup [-h] [-sm SOURCE_MAX_SNAPSHOTS]
+                      [-dm DESTINATION_MAX_SNAPSHOTS]
+                      [-ss SOURCE_CONTAINER_SUBVOLUME] [-c] [-li LOG_IDENT]
+                      [-q] [--version]
+                      source_subvolume destination_container_subvolume
 
 positional arguments:
   source_subvolume      Source subvolume to backup. Local path or SSH url.
@@ -70,4 +68,5 @@ optional arguments:
                         Log ident used for syslog logging, defaults to script
                         name
   -q, --quiet           Do not log to STDOUT
-```
+  --version             show program's version number and exit
+  ```
