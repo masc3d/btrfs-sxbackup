@@ -6,6 +6,37 @@ Btrfs snapshot backup utility
 * Syslog logging
 * Compression of transferred data
 
+## System dependencies ##
+#### Required ####
+The following packages have to be available on both source and destination
+* btrfs-progs
+
+The system executing btrfs-backup requires
+* python3
+
+#### Optional ####
+* ssh (for remote push/pull, not required for local operation)
+* lzop (for compression support if desired)
+* pv (provides progress indication if installed)
+
+## Installation ##
+```
+pip install <btrfs-sxbackup-archive.tar.gz>
+```
+
+## Setup ##
+* when using ssh, public/private key authentication should be set up
+
+## Usage examples ##
+```
+btrfs-sxbackup.py ssh://root@myhost.org:/ /backup/myhost
+```
+Pulls snapshot backups of ___/___ on remote host ___myhost.org___ to local subvolume ___/backup/myhost___
+```
+btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
+```
+Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver.org___
+
 ```
 btrfs-sxbackup.py --help
 btrfs-sxbackup v0.3.2 by masc
@@ -40,34 +71,3 @@ optional arguments:
                         name
   -q, --quiet           Do not log to STDOUT
 ```
-
-## Dependencies ##
-#### Required ####
-The following packages have to be available on both source and destination
-* btrfs-progs
-
-The system executing btrfs-backup requires
-* python3
-
-#### Optional ####
-* ssh (for remote push/pull, not required for local operation)
-* lzop (for compression support if desired)
-* pv (provides progress indication if installed)
-
-## Installation ##
-```
-pip install <btrfs-sxbackup-archive.tar.gz>
-```
-
-## Setup ##
-* when using ssh, public/private key authentication should be set up
-
-## Examples ##
-```
-btrfs-sxbackup.py ssh://root@myhost.org:/ /backup/myhost
-```
-Pulls snapshot backups of ___/___ on remote host ___myhost.org___ to local subvolume ___/backup/myhost___
-```
-btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
-```
-Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver.org___
