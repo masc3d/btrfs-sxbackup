@@ -29,11 +29,11 @@ pip install btrfs-sxbackup
 
 ## Usage examples ##
 ```
-btrfs-sxbackup.py ssh://root@myhost.org:/ /backup/myhost
+btrfs-sxbackup ssh://root@myhost.org:/ /backup/myhost
 ```
 Pulls snapshot backups of ___/___ on remote host ___myhost.org___ to local subvolume ___/backup/myhost___
 ```
-btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
+btrfs-sxbackup / ssh://root@mybackupserver.org:/backup/myhost
 ```
 Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver.org___
 
