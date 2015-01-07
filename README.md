@@ -21,7 +21,7 @@ The system executing btrfs-backup requires
 
 ## Installation ##
 ```
-pip install <btrfs-sxbackup-archive.tar.gz>
+pip install btrfs-sxbackup
 ```
 
 ## Setup ##
