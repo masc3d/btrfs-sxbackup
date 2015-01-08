@@ -7,7 +7,7 @@ import traceback
 from argparse import ArgumentParser
 from urllib import parse
 
-from btrfs_sxbackup.SxBackup import SxBackup
+from btrfs_sxbackup.Backup import Backup
 from btrfs_sxbackup import __version__
 
 app_name = 'btrfs-sxbackup'
@@ -53,17 +53,17 @@ try:
     else:
         source_container_subvolume = os.path.join(source_url.path, args.source_container_subvolume)
 
-    sxbackup = SxBackup(
+    backup = Backup(
         source_url=source_url,
         source_container_subvolume=source_container_subvolume,
         source_max_snapshots=args.source_max_snapshots,
         dest_url=dest_url,
         dest_max_snapshots=args.destination_max_snapshots)
 
-    sxbackup.compress = args.compress
+    backup.compress = args.compress
 
     # Perform actual backup
-    sxbackup.run()
+    backup.run()
 except SystemExit as e:
     if e.code != 0:
         raise

@@ -9,7 +9,7 @@ from datetime import datetime
 from configparser import ConfigParser
 
 
-class SxBackup:
+class Backup:
     """ Backup """
 
     CONFIG_FILENAME = '/etc/btrfs-sxbackup.conf'
@@ -48,10 +48,10 @@ class SxBackup:
             :param location: Location instance or None
             :return: Section name string
             """
-            if isinstance(location, SxBackup.SourceLocation):
+            if isinstance(location, Backup.SourceLocation):
                 return 'Source'
             else:
-                if isinstance(location, SxBackup.DestinationLocation):
+                if isinstance(location, Backup.DestinationLocation):
                     return 'Destination'
                 else:
                     return 'Global'
@@ -99,7 +99,7 @@ class SxBackup:
             self.temp_subvolume = os.path.join(self.container_subvolume, self.__TEMP_BACKUP_NAME)
 
             # Override configuration params
-            self.configuration = SxBackup.Configuration(self)
+            self.configuration = Backup.Configuration(self)
 
         def __format_log_msg(self, msg):
             return '%s :: %s' % (self.get_name(), msg)
@@ -231,8 +231,8 @@ class SxBackup:
         """ c'tor """
         self.__logger = logging.getLogger(self.__class__.__name__)
 
-        self.source = SxBackup.SourceLocation(source_url, source_container_subvolume, source_max_snapshots)
-        self.dest = SxBackup.DestinationLocation(dest_url, "", dest_max_snapshots)
+        self.source = Backup.SourceLocation(source_url, source_container_subvolume, source_max_snapshots)
+        self.dest = Backup.DestinationLocation(dest_url, "", dest_max_snapshots)
 
         self.compress = False
 
@@ -265,9 +265,9 @@ class SxBackup:
 
         starting_time = time.monotonic()
         # Read global configuration
-        config = SxBackup.Configuration()
-        if os.path.exists(SxBackup.CONFIG_FILENAME):
-            config.read(open(SxBackup.CONFIG_FILENAME))
+        config = Backup.Configuration()
+        if os.path.exists(Backup.CONFIG_FILENAME):
+            config.read(open(Backup.CONFIG_FILENAME))
 
         # Prepare environments
         self.__logger.info('Preparing environment')
@@ -306,7 +306,7 @@ class SxBackup:
 
         new_snapshot_name = self.__create_snapshot_name()
         if len(self.source.snapshot_names) > 0 and new_snapshot_name <= self.source.snapshot_names[0]:
-            raise SxBackup.Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] \
+            raise Backup.Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] \
                                  which may indicate a system time problem'
                                  % (new_snapshot_name, self.source.snapshot_names[0]))
 
