@@ -1,8 +1,5 @@
 import sys
-
-from distutils.core import setup
 from setuptools import setup
-
 from btrfs_sxbackup import __version__
 
 if sys.version_info.major < 3:
@@ -17,9 +14,8 @@ setup(
     license='GNU GPL',
     url='https://github.com/masc3d/btrfs-sxbackup',
     packages=['btrfs_sxbackup'],
-    scripts=['README.md'],
     description='Incremental btrfs snapshot backups with push/pull support via SSH',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',

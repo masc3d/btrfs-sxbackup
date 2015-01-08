@@ -1,4 +1,3 @@
-import configparser
 import logging
 import logging.handlers
 import os

@@ -21,22 +21,29 @@ class SxBackup:
             self.name = name
 
     class Configuration:
+        ''' btrfs-sxbackup configuration file '''
+
+        __KEY_SOURCE = 'source'
+        __KEY_SOURCE_CONTAINER = 'source-container'
+        __KEY_DESTINATION = 'destination'
+        __KEY_KEEP = 'keep'
+
         def __init__(self, config_type):
             self.config_type = config_type
             self.source = None
             self.source_container = None
             self.destination = None
-            self.keep = '1w > 2/d, 2w > daily, 1m > weekly, 2m > none'
+            self.keep = '1w = 2/d, 2w = daily, 1m = weekly, 2m = none'
 
         def read(self, fileobject):
             cparser = ConfigParser()
             cparser.read_file(fileobject)
 
             section = self.config_type
-            self.source = cparser.get(section, 'source', fallback=None)
-            self.source_container = cparser.get(section, 'source-container', fallback=None)
-            self.destination = cparser.get(section, 'destination', fallback=None)
-            self.keep = cparser.get(section, 'keep', fallback=self.keep)
+            self.source = cparser.get(section, self.__KEY_SOURCE, fallback=None)
+            self.source_container = cparser.get(section, self.__KEY_SOURCE_CONTAINER, fallback=None)
+            self.destination = cparser.get(section, self.__KEY_DESTINATION, fallback=None)
+            self.keep = cparser.get(section, self.__KEY_KEEP, fallback=self.keep)
 
         def write(self, fileobject):
             cparser = ConfigParser()
@@ -44,18 +51,20 @@ class SxBackup:
             section = self.config_type
             cparser.add_section(section)
             if self.source is not None:
-                cparser.set(section, 'source', self.source)
+                cparser.set(section, self.__KEY_SOURCE, self.source)
             if self.source_container is not None:
-                cparser.set(section, 'source-container', self.source_container)
+                cparser.set(section, self.__KEY_SOURCE_CONTAINER, self.source_container)
             if self.destination is not None:
-                cparser.set(section, 'destination', self.destination)
+                cparser.set(section, self.__KEY_DESTINATION, self.destination)
             if self.keep is not None:
-                cparser.set(section, 'keep', self.keep)
+                cparser.set(section, self.__KEY_KEEP, self.keep)
             cparser.write(fileobject)
 
     class Location:
-        TEMP_BACKUP_NAME = 'temp'
         ''' Backup location '''
+
+        __TEMP_BACKUP_NAME = 'temp'
+
         def __init__(self, url, container_subvolume, max_snapshots):
             self.__logger = logging.getLogger(self.__class__.__name__)
             self.url = url
@@ -66,7 +75,7 @@ class SxBackup:
 
             # Path of subvolume for current backup run
             # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
-            self.temp_subvolume = os.path.join(self.container_subvolume, self.TEMP_BACKUP_NAME)
+            self.temp_subvolume = os.path.join(self.container_subvolume, self.__TEMP_BACKUP_NAME)
 
             # Override configuration params
             self.configuration = SxBackup.Configuration(self.get_config_type())
