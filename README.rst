@@ -24,6 +24,7 @@ Optional
 
 Installation
 ============
+.. code ::
 
     pip install <btrfs-sxbackup-archive.tar.gz>
 
@@ -38,13 +39,13 @@ Usage examples
 
     btrfs-sxbackup.py ssh://root@myhost.org:/ /backup/myhost
 
-Pulls snapshot backups of ___/___ on remote host ___myhost.org___ to local subvolume ___/backup/myhost___
+Pulls snapshot backups of **/** on remote host **myhost.org** to local subvolume **/backup/myhost**
 
 .. code ::
 
     btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
 
-Pushes snapshot backups of local subvolume ___/___ to remote subvolume ___/backup/myhost___ on host ___mybackupserver.org___
+Pushes snapshot backups of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
 
 .. code ::
 
