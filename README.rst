@@ -12,9 +12,11 @@ System dependencies
 Required
 --------
 The following packages have to be available on both source and destination
+
 * btrfs-progs
 
 The system executing btrfs-backup requires
+
 * python3
 
 Optional
