@@ -29,7 +29,7 @@ Installation
 ============
 .. code ::
 
-    pip install <btrfs-sxbackup-archive.tar.gz>
+    pip install btrfs-sxbackup
 
 Setup
 =====
