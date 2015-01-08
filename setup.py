@@ -3,7 +3,7 @@ from setuptools import setup
 from btrfs_sxbackup import __version__
 
 if sys.version_info.major < 3:
-    print('brfs-sxbackup requires python v3.x')
+    print('btrfs-sxbackup requires python v3.x')
     sys.exit(1)
 
 setup(
@@ -29,8 +29,7 @@ setup(
         'Topic :: Utilities'],
 
     entry_points={
-        'console_scripts':
-            ['btrfs-sxbackup = btrfs_sxbackup.__main__']
+        'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__']
     }
 )
 
