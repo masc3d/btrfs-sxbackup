@@ -1,7 +1,8 @@
 btrfs-sxbackup
 **************
 
-Btrfs snapshot backup utility 
+Btrfs snapshot backup utility
+
 * Push/pull support via SSH
 * Syslog logging
 * Compression of transferred data
