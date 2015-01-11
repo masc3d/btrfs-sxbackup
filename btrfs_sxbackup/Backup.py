@@ -17,10 +17,6 @@ class Backup:
     class Error(Exception):
         pass
 
-    class Snapshot:
-        def __init__(self, name):
-            self.name = name
-
     class Configuration:
         """ btrfs-sxbackup configuration file """
 
@@ -118,7 +114,8 @@ class Backup:
 
         def create_subprocess_args(self, cmd):
             """
-            Create command/args array for subprocess, wraps command into ssh call if url host name is not None
+            Create subprocess arguments for shell command/args to be executed in this location.
+            Internally Wraps command into ssh call if url host name is not None
             :param cmd: Shell command
             :return: Subprocess arguments
             """
