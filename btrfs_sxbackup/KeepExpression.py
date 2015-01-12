@@ -240,7 +240,7 @@ class KeepExpression:
         # Conditions sorted by age
         self.conditions = sorted(conditions, key=lambda c: c.age)
 
-    def filter(self, items, lambda_timestamp):
+    def filter(self, items: list, lambda_timestamp):
         """
         Filter items according to keep expression
         :param items: Items to filter

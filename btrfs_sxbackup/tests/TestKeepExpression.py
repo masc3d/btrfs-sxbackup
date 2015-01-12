@@ -18,7 +18,7 @@ class TestKeepExpression(unittest.TestCase):
 
         self.snapshot_names = snapshot_names
 
-    def testKeepExpression(self):
+    def test_filter(self):
         k = KeepExpression('1d = 4/d, 4d = daily, 1w = 2/d, 1m = weekly, 3m = none')
         #k = KeepExpression('10')
 
@@ -40,8 +40,3 @@ class TestKeepExpression(unittest.TestCase):
         self.assertEqual(items_to_remove_amount + items_to_keep_amount, len(self.snapshot_names),
                          'Sum of items to keep and remove must be total number of items')
         print(time.perf_counter() - start)
-
-
-
-
-

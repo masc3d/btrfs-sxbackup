@@ -6,10 +6,10 @@ import traceback
 
 from argparse import ArgumentParser
 from urllib import parse
-
 from btrfs_sxbackup.Backup import Backup
 from btrfs_sxbackup.Configuration import Configuration
 from btrfs_sxbackup.KeepExpression import KeepExpression
+from btrfs_sxbackup.Mail import Mail
 from btrfs_sxbackup import __version__
 
 app_name = 'btrfs-sxbackup'
@@ -36,6 +36,9 @@ parser.add_argument('-dk', '--destination-keep', type=str, default='10',
 parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup',
                     help='Override path to source snapshot container subvolume. Both absolute and relative paths\
                      are possible. Default is \'sxbackup\', relative to source subvolume')
+parser.add_argument('-m', '--mail', type=str, nargs='?', const='',
+                    help='Enables email notifications. If an email address is given, it overrides the'
+                         ' default email-recipient setting in /etc/btrfs-sxbackup.conf')
 parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=app_name,
                     help='Log ident used for syslog logging, defaults to script name')
 parser.add_argument('--version', action='version', version='%s v%s' % (app_name, __version__))
@@ -48,13 +51,29 @@ config.read()
 # Initialize logging
 logger = logging.getLogger()
 if not args.quiet:
-    logger.addHandler(logging.StreamHandler(sys.stdout))
+    log_std_handler = logging.StreamHandler(sys.stdout)
+    log_std_handler.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
+    logger.addHandler(log_std_handler)
+
+# Syslog handler
 log_syslog_handler = logging.handlers.SysLogHandler('/dev/log')
-log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(message)s'))
+log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(levelname)s %(message)s'))
 logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
-if args.log_ident is not None and len(args.log_ident) > 0:
-    log_syslog_handler.ident = args.log_ident + ' '
+
+# Log ident support
+if args.log_ident:
+    log_syslog_handler.ident = ' '.join([config.log_ident, args.log_ident]) + ' '
+
+# Mail notification support
+log_memory_handler = None
+if args.mail is not None:
+    Mail.instance().email_recipient = args.mail if len(args.mail) > 0 else config.email_recipient
+
+    # Memory handler will buffer output for sending via mail later if needed
+    log_memory_handler = logging.handlers.MemoryHandler(capacity=-1)
+    log_memory_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(log_memory_handler)
 
 logger.info('%s v%s' % (app_name, __version__))
 
@@ -82,8 +101,20 @@ except SystemExit as e:
     if e.code != 0:
         raise
 except BaseException as e:
-    logger.error('ERROR: %s' % e)
+    # Log exception message
+    e_msg = str(e)
+    if len(e_msg) > 0:
+        logger.error('%s' % e)
+
+    # Log stack trace
     logger.error(traceback.format_exc())
+
+    # Email notification
+    if Mail.instance().email_recipient:
+        # Format message and send
+        msg = '\n'.join(map(lambda log_record: log_memory_handler.formatter.format(log_record),
+                            log_memory_handler.buffer))
+        Mail.instance().send('%s FAILED' % app_name, msg)
     exit(1)
 
 exit(0)
