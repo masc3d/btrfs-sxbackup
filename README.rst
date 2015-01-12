@@ -39,20 +39,22 @@ Setup
 Usage examples
 ==============
 
+Pull snapshot backups of **/** on remote host **myhost.org** to local subvolume **/backup/myhost**
+
 .. code ::
 
     btrfs-sxbackup ssh://root@myhost.org:/ /backup/myhost
 
-Pulls snapshot backups of **/** on remote host **myhost.org** to local subvolume **/backup/myhost**
+Push snapshot backups of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
 
 .. code ::
 
     btrfs-sxbackup / ssh://root@mybackupserver.org:/backup/myhost
 
-Pushes snapshot backups of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
+Cron
+----
 
-Cron example
-------------
+Cronhob performing a local and remote pull backup job
 
 .. code ::
 
@@ -61,7 +63,8 @@ Cron example
     30 2    * * *     root     btrfs-sxbackup / /mnt/backup/localsystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
     0 3     * * *     root     btrfs-sxbackup ssh://root@remotesystem/ /mnt/backup/remotesystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
 
-Example cronhob performing a local and remote pull backup job
+Synopsis and options
+====================
 
 .. code ::
 
