@@ -7,6 +7,8 @@ import time
 
 from datetime import datetime
 from configparser import ConfigParser
+from btrfs_sxbackup.SnapshotName import SnapshotName
+from btrfs_sxbackup.KeepExpression import KeepExpression
 
 
 class Backup:
@@ -82,11 +84,17 @@ class Backup:
 
         __TEMP_BACKUP_NAME = 'temp'
 
-        def __init__(self, url, container_subvolume, max_snapshots):
+        def __init__(self, url, container_subvolume, keep):
+            """
+            c'tor
+            :param url: Location URL
+            :param container_subvolume: Subvolume name
+            :param keep: Keep expression instance
+            """
             self.__logger = logging.getLogger(self.__class__.__name__)
             self.url = url
             self.container_subvolume = os.path.join(url.path, container_subvolume)
-            self.max_snapshots = max_snapshots
+            self.keep = keep
             self.snapshot_names = []
             self.configuration_filename = os.path.join(self.container_subvolume, '.btrfs-sxbackup')
 
@@ -133,7 +141,7 @@ class Backup:
             """ Creates bash comand string to remove multiple snapshots within a btrfs subvolume """
 
             return " && ".join(
-                map(lambda x: 'btrfs sub del %s' % (os.path.join(self.container_subvolume, x)), snapshot_names))
+                map(lambda x: 'btrfs sub del %s' % (os.path.join(self.container_subvolume, str(x))), snapshot_names))
 
         def prepare_environment(self):
             """ Prepare location environment """
@@ -159,20 +167,22 @@ class Backup:
 
             lines = map(lambda x: strip_name(x), lines)
             # sort and return
-            self.snapshot_names = sorted(lines, reverse=True)
+            snapshot_names = map(lambda sn: SnapshotName(sn), lines)
+            self.snapshot_names = sorted(snapshot_names, key=lambda sn: sn.timestamp)
             return self.snapshot_names
 
         def cleanup_snapshots(self):
             """ Clean out excess backups/snapshots """
+            if self.keep is not None:
+                (to_remove_by_condition, to_keep) = self.keep.filter(self.snapshot_names, lambda sn: sn.timestamp)
 
-            if len(self.snapshot_names) > self.max_snapshots:
-                remove_count = len(self.snapshot_names) - self.max_snapshots
-                snapshots_to_remove = self.snapshot_names[-remove_count:]
-                # self.log_info('Removing snapshots [%s]' % (", ".join(snapshots_to_remove)))
-                self.log_info('Removing %d of %d snapshots (because >%d): %s'
-                              % (remove_count, len(self.snapshot_names), self.max_snapshots, snapshots_to_remove))
-                subprocess.check_output(
-                    self.create_subprocess_args(self.create_cleanup_bash_command(snapshots_to_remove)))
+                for c in to_remove_by_condition.keys():
+                    to_remove = to_remove_by_condition[c]
+
+                    self.log_info('Removing %d snapshot(s) due to condition %s: %s'
+                                  % (len(to_remove), str(c), list(map(lambda x: str(x), to_remove))))
+                    subprocess.check_output(
+                        self.create_subprocess_args(self.create_cleanup_bash_command(to_remove)))
 
         def write_configuration(self):
             """ Write configuration file to container subvolume """
@@ -224,12 +234,20 @@ class Backup:
         def get_name(self):
             return 'Destination'
 
-    def __init__(self, source_url, source_container_subvolume, source_max_snapshots, dest_url, dest_max_snapshots):
-        """ c'tor """
+    def __init__(self, source_url, source_container_subvolume, source_keep, dest_url, dest_keep):
+        """
+        c'tor
+        :param source_url: Source URL
+        :param source_container_subvolume: Source container subvolume name
+        :param source_keep: Source keep expression instance
+        :param dest_url: Destination URL
+        :param dest_keep: Destination keep expression instance
+        :return:
+        """
         self.__logger = logging.getLogger(self.__class__.__name__)
 
-        self.source = Backup.SourceLocation(source_url, source_container_subvolume, source_max_snapshots)
-        self.dest = Backup.DestinationLocation(dest_url, "", dest_max_snapshots)
+        self.source = Backup.SourceLocation(source_url, source_container_subvolume, source_keep)
+        self.dest = Backup.DestinationLocation(dest_url, "", dest_keep)
 
         self.compress = False
 
@@ -286,6 +304,7 @@ class Backup:
         self.source.configuration.destination = \
             self.dest.url.geturl() if self.dest.is_remote() or both_remote_or_local \
             else None
+        self.source.configuration.keep = self.source.keep.expression_text if self.source.keep is not None else None
 
         self.dest.configuration.source = \
             self.source.url.geturl() if self.source.is_remote() or both_remote_or_local \
@@ -296,16 +315,18 @@ class Backup:
         self.dest.configuration.destination = \
             self.dest.url.geturl() if both_remote_or_local \
             else None
+        self.dest.configuration.keep = self.dest.keep.expression_text if self.dest.keep is not None else None
 
         # Retrieve snapshot names of both source and destination 
         self.source.retrieve_snapshot_names()
         self.dest.retrieve_snapshot_names()
 
-        new_snapshot_name = self.__create_snapshot_name()
-        if len(self.source.snapshot_names) > 0 and new_snapshot_name <= self.source.snapshot_names[0]:
+        new_snapshot_name = SnapshotName()
+        if len(self.source.snapshot_names) > 0 \
+                and new_snapshot_name.timestamp <= self.source.snapshot_names[0].timestamp:
             raise Backup.Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] \
                                  which may indicate a system time problem'
-                                 % (new_snapshot_name, self.source.snapshot_names[0]))
+                               % (new_snapshot_name, self.source.snapshot_names[0]))
 
         # Create source snapshot
         self.source.create_snapshot()
@@ -318,7 +339,7 @@ class Backup:
             send_command_str = 'btrfs send %s' % self.source.temp_subvolume
         else:
             send_command_str = 'btrfs send -p %s %s' % (
-                os.path.join(self.source.container_subvolume, self.source.snapshot_names[0]),
+                os.path.join(self.source.container_subvolume, str(self.source.snapshot_names[0])),
                 self.source.temp_subvolume)
 
         if self.compress:
@@ -372,9 +393,9 @@ class Backup:
         self.__logger.info('Finalizing backup')
         subprocess.check_output(self.source.create_subprocess_args(
             'mv %s %s' % (
-                self.source.temp_subvolume, os.path.join(self.source.container_subvolume, new_snapshot_name))))
+                self.source.temp_subvolume, os.path.join(self.source.container_subvolume, str(new_snapshot_name)))))
         subprocess.check_output(self.dest.create_subprocess_args(
-            'mv %s %s' % (self.dest.temp_subvolume, os.path.join(self.dest.url.path, new_snapshot_name))))
+            'mv %s %s' % (self.dest.temp_subvolume, os.path.join(self.dest.url.path, str(new_snapshot_name)))))
 
         # Update snapshot name lists
         self.source.snapshot_names = [new_snapshot_name] + self.source.snapshot_names

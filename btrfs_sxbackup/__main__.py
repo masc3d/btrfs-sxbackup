@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 from urllib import parse
 
 from btrfs_sxbackup.Backup import Backup
+from btrfs_sxbackup.KeepExpression import KeepExpression
 from btrfs_sxbackup import __version__
 
 app_name = 'btrfs-sxbackup'
@@ -18,10 +19,10 @@ parser.add_argument('source_subvolume', type=str,
                     help='Source subvolume to backup. Local path or SSH url.')
 parser.add_argument('destination_container_subvolume', type=str,
                     help='Destination subvolume receiving snapshots. Local path or SSH url.')
-parser.add_argument('-sm', '--source-max-snapshots', type=int, default=10,
-                    help='Maximum number of source snapshots to keep (defaults to 10).')
-parser.add_argument('-dm', '--destination-max-snapshots', type=int, default=10,
-                    help='Maximum number of destination snapshots to keep (defaults to 10).')
+parser.add_argument('-sk', '--source-keep', type=str, default='10',
+                    help='Expression defining source snapshots to keep.')
+parser.add_argument('-dk', '--destination-keep', type=str, default='10',
+                    help='Expression defining destination snapshots to keep.')
 parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup',
                     help='Override path to source snapshot container subvolume. Both absolute and relative paths\
                      are possible. (defaults to \'sxbackup\', relative to source subvolume)')
@@ -56,9 +57,9 @@ try:
     backup = Backup(
         source_url=source_url,
         source_container_subvolume=source_container_subvolume,
-        source_max_snapshots=args.source_max_snapshots,
+        source_keep=KeepExpression(args.source_keep),
         dest_url=dest_url,
-        dest_max_snapshots=args.destination_max_snapshots)
+        dest_keep=KeepExpression(args.destination_keep))
 
     backup.compress = args.compress
 

@@ -1,3 +1,4 @@
+import collections
 import math
 import re
 from datetime import datetime
@@ -38,10 +39,10 @@ class KeepExpression:
         """
         Each condition of a keep expression reflects how many backups to keep after a specific amount of time
         """
-        def __init__(self, age, keep_amount, keep_interval):
+        def __init__(self, age, interval_duration, interval_amount):
             self.age = age
-            self.interval_duration = keep_interval
-            self.interval_amount = keep_amount
+            self.interval_duration = interval_duration
+            self.interval_amount = interval_amount
 
         def __repr__(self):
             return 'Condition(age=%s, keep_amount=%s, keep_interval=%s)' \
@@ -101,7 +102,7 @@ class KeepExpression:
             :param lambda_timestamp: Lambda to return timestamp for each item
             :return: (items, to_keep, to_remove) The items which have not matched and one list items to keep/remove
             """
-            (items, interval_items) = splice(items, lambda i: self.start <= lambda_timestamp(i) < self.end)
+            (items, interval_items) = splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
             (to_keep, to_remove) = self.__reduce(interval_items, self.amount)
 
             return items, to_keep, to_remove
@@ -138,15 +139,18 @@ class KeepExpression:
             self.interval_end = interval_end
             self.condition_end = condition_end
 
+        def __str__(self):
+            return 'age [%s] interval duration [%s] interval amount [%s]' % (self.age, self.interval_duration, self.interval_amount)
+
         def interval_by_timestamp(self, timestamp):
             """
-            Creates an applicable interval which spans the given timestamp.
-            If timestamp is out of range of the condition this method will return None
-            :param timestamp: Timestamp the interval is supposed to span
-            :return: ApplicableInterval or None if timestamp out of bounds of the condition
+            Creates an applicable interval for the given timestamp
+            If timestamp is out of range of the condition start/end time this method will return None
+            :param timestamp: Timestamp
+            :return: ApplicableInterval or None if timestamp out of bounds of the condition start/end time
             """
-            if timestamp < self.condition_start or \
-                    (self.condition_end is not None and timestamp >= self.condition_end):
+            if timestamp > self.condition_start or \
+                    (self.condition_end is not None and timestamp <= self.condition_end):
                 return None
 
             if self.interval_duration is None:
@@ -160,11 +164,6 @@ class KeepExpression:
             return KeepExpression.ApplicableInterval(self.condition_start + f * self.interval_duration,
                                                      self.interval_duration,
                                                      self.interval_amount)
-
-    class FilterResult:
-        def __init__(self):
-            self.items_to_keep = list()
-            self.items_to_remove = list()
 
     def __create_applicable_conditions(self, start_time):
         """
@@ -183,6 +182,8 @@ class KeepExpression:
         c'tor
         :param expression: Expression string defining multiple criteria for keeping backups
         """
+        expression = str(expression)
+        self.expression_text = expression
         conditions = list()
 
         # Parse keep expression string
@@ -190,40 +191,47 @@ class KeepExpression:
         criterias = expression.split(',')
         for criteria in criterias:
             # Parse criteria expression
+            criteria = criteria.strip()
             cparts = criteria.split('=')
             if len(cparts) != 2:
-                raise ValueError('Criteria must consist of age and interval separated by equality operator [%s]'
-                                 % criteria)
-            age = cparts[0].strip()
-            keep = cparts[1].strip()
-
-            # Parse age (examples: 4d, 4w, 30 ..)
-            match = self.__age_re.match(age)
-            if match is None:
-                raise ValueError('Invalid age [%s]' % age)
-
-            if match.group(2) is not None:
-                # Time literal part of age
-                age_hours = int(match.group(1)) * self.__kd[match.group(2)]
+                try:
+                    age = timedelta(0)
+                    interval_duration = None
+                    interval_amount = int(criteria)
+                except:
+                    raise ValueError('Criteria must consist of age and interval separated by equality operator [%s]'
+                                     % criteria)
             else:
-                # Plain number of hours
-                age_hours = timedelta(hours=int(match.group(1)))
+                age_literal = cparts[0].strip()
+                keep_literal = cparts[1].strip()
 
-            # Parse keep expression (examples: 4/d, 4/w, 20 ..)
-            if keep[0] in self.__kd:
-                keep_interval = self.__kd[keep[0]]
-                keep_amount = 1 if keep_interval is not None else 0
-            else:
-                match = self.__keep_re.match(keep)
+                # Parse age (examples: 4d, 4w, 30 ..)
+                match = self.__age_re.match(age_literal)
                 if match is None:
-                    raise ValueError('Invalid keep [%s]' % keep)
-                keep_amount = int(match.group(1))
-                if match.group(3) is None:
-                    keep_interval = None
-                else:
-                    keep_interval = self.__kd[str(match.group(3)[0])]
+                    raise ValueError('Invalid age [%s]' % age_literal)
 
-            condition = KeepExpression.Condition(age_hours, keep_amount, keep_interval)
+                if match.group(2) is not None:
+                    # Time literal part of age
+                    age = int(match.group(1)) * self.__kd[match.group(2)]
+                else:
+                    # Plain number of hours
+                    age = timedelta(hours=int(match.group(1)))
+
+                # Parse keep expression (examples: 4/d, 4/w, 20 ..)
+                if keep_literal[0] in self.__kd:
+                    interval_duration = self.__kd[keep_literal[0]]
+                    interval_amount = 1 if interval_duration is not None else 0
+                else:
+                    match = self.__keep_re.match(keep_literal)
+                    if match is None:
+                        raise ValueError('Invalid keep [%s]' % keep_literal)
+                    interval_amount = int(match.group(1))
+                    if match.group(3) is None:
+                        interval_duration = None
+                    else:
+                        interval_duration = self.__kd[str(match.group(3)[0])]
+
+            condition = KeepExpression.Condition(age, interval_duration, interval_amount)
             conditions.append(condition)
 
         # Conditions sorted by age
@@ -234,7 +242,7 @@ class KeepExpression:
         Filter items according to keep expression
         :param items: Items to filter
         :param lambda_timestamp: Lambda to return the timestamp for each item
-        :return:
+        :return: (items_to_remove_by_condition, items_to_keep)
         """
 
         if len(self.conditions) == 0:
@@ -243,17 +251,21 @@ class KeepExpression:
         if len(items) == 0:
             return list(), list()
 
-        items = sorted(items, key=lambda_timestamp, reverse=False)
+        items = sorted(items, key=lambda_timestamp, reverse=True)
 
         items_to_keep = list()
-        items_to_remove = list()
+        items_to_remove_by_condition = collections.OrderedDict()
 
         now = datetime.utcnow()
         conditions = self.__create_applicable_conditions(now)
 
-        # Splice items newer than first condition
-        (items, spliced) = splice(items, lambda i: lambda_timestamp(i) < now + self.conditions[0].age)
-        items_to_keep.extend(spliced)
+        # Splice recent items (newer than first condition age)
+        (items, recent_items) = splice(items, lambda i: lambda_timestamp(i) > (now - self.conditions[0].age))
+        items_to_keep.extend(recent_items)
+
+        for x in recent_items:
+            if x.timestamp < now - self.conditions[0].age:
+                print('%s < %s' % (x.timestamp, (now - self.conditions[0].age)))
 
         while len(items) > 0 and len(conditions) > 0:
             item_timestamp = lambda_timestamp(items[0])
@@ -263,6 +275,11 @@ class KeepExpression:
             if interval is None:
                 conditions.pop(0)
                 continue
+
+            if condition not in items_to_remove_by_condition:
+                items_to_remove_by_condition[condition] = list()
+
+            items_to_remove = items_to_remove_by_condition[condition]
 
             if interval.end is not None:
                 (items, to_keep, to_remove) = interval.filter(items, lambda_timestamp)
@@ -274,4 +291,4 @@ class KeepExpression:
                 items_to_remove.extend(items[interval.amount:])
                 items.clear()
 
-        return items_to_remove, items_to_keep
+        return items_to_remove_by_condition, items_to_keep
