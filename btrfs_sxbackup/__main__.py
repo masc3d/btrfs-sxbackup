@@ -63,7 +63,9 @@ logger.setLevel(logging.INFO)
 
 # Log ident support
 if args.log_ident:
-    log_syslog_handler.ident = ' '.join([config.log_ident, args.log_ident]) + ' '
+    log_ident = args.log_ident if args.log_ident else config.log_ident
+    if log_ident:
+        log_syslog_handler.ident = log_ident + ' '
 
 # Mail notification support
 log_memory_handler = None
