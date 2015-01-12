@@ -39,7 +39,7 @@ parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sx
 parser.add_argument('-m', '--mail', type=str, nargs='?', const='',
                     help='Enables email notifications. If an email address is given, it overrides the'
                          ' default email-recipient setting in /etc/btrfs-sxbackup.conf')
-parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=app_name,
+parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=None,
                     help='Log ident used for syslog logging, defaults to script name')
 parser.add_argument('--version', action='version', version='%s v%s' % (app_name, __version__))
 args = parser.parse_args()
