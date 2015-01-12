@@ -37,7 +37,7 @@ class Backup:
             self.source = None
             self.source_container = None
             self.destination = None
-            self.keep = '1w = 2/d, 2w = daily, 1m = weekly, 2m = none'
+            self.keep = KeepExpression('1w = 2/d, 2w = daily, 1m = weekly, 2m = none')
 
         @staticmethod
         def __section_name_by_location(location):

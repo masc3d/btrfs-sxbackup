@@ -20,7 +20,7 @@ class TestKeepExpression(unittest.TestCase):
 
     def testKeepExpression(self):
         k = KeepExpression('1d = 4/d, 4d = daily, 1w = 2/d, 1m = weekly, 3m = none')
-        k = KeepExpression('10')
+        #k = KeepExpression('10')
 
         start = time.perf_counter()
         (items_to_remove_by_condition, items_to_keep) = k.filter(self.snapshot_names, lambda x: x.timestamp)
@@ -28,6 +28,9 @@ class TestKeepExpression(unittest.TestCase):
         items_to_remove_amount = sum(map(lambda x: len(x), items_to_remove_by_condition.values()))
         items_to_keep_amount = len(items_to_keep)
 
+        # for i in items_to_keep:
+        #     print(i)
+        #
         # for c in items_to_remove_by_condition.keys():
         #     print(c)
         #     for i in items_to_remove_by_condition[c]:

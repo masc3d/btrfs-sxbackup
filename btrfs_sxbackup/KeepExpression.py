@@ -59,7 +59,7 @@ class KeepExpression:
             self.start = start
             self.duration = duration
             self.amount = amount
-            self.end = self.start + self.duration if self.duration is not None else None
+            self.end = self.start - self.duration if self.duration is not None else None
 
         def __repr__(self):
             return 'ApplicableInterval(start=%s, duration=%s, amount=%s)' \
@@ -114,7 +114,7 @@ class KeepExpression:
         def __init__(self, condition, next_condition, start_time):
             self.age = condition.age
             self.interval_amount = condition.interval_amount
-            self.condition_start = start_time + condition.age
+            self.condition_start = start_time - condition.age
             self.interval_start = self.condition_start
 
             # Calculate interval duration using next condition if needed
@@ -129,11 +129,11 @@ class KeepExpression:
 
             # Calculate condition and interval end
             condition_end = None
-            interval_end = self.interval_start + self.interval_duration if self.interval_duration is not None else None
+            interval_end = self.interval_start - self.interval_duration if self.interval_duration is not None else None
             if next_condition is not None:
-                condition_end = start_time + next_condition.age
+                condition_end = start_time - next_condition.age
                 # Limit end of interval to end of condition
-                if interval_end is not None and interval_end > condition_end:
+                if interval_end is not None and interval_end < condition_end:
                     interval_end = condition_end
 
             self.interval_end = interval_end
@@ -159,9 +159,9 @@ class KeepExpression:
                                                          self.interval_amount)
 
             # Calculate interval factor
-            f = math.floor((timestamp - self.condition_start) / self.interval_duration)
+            f = math.floor((self.condition_start - timestamp) / self.interval_duration)
 
-            return KeepExpression.ApplicableInterval(self.condition_start + f * self.interval_duration,
+            return KeepExpression.ApplicableInterval(self.condition_start - f * self.interval_duration,
                                                      self.interval_duration,
                                                      self.interval_amount)
 
@@ -263,9 +263,7 @@ class KeepExpression:
         (items, recent_items) = splice(items, lambda i: lambda_timestamp(i) > (now - self.conditions[0].age))
         items_to_keep.extend(recent_items)
 
-        for x in recent_items:
-            if x.timestamp < now - self.conditions[0].age:
-                print('%s < %s' % (x.timestamp, (now - self.conditions[0].age)))
+        print(len(recent_items))
 
         while len(items) > 0 and len(conditions) > 0:
             item_timestamp = lambda_timestamp(items[0])
