@@ -9,80 +9,80 @@ from datetime import datetime
 from configparser import ConfigParser
 from btrfs_sxbackup.SnapshotName import SnapshotName
 from btrfs_sxbackup.KeepExpression import KeepExpression
+from btrfs_sxbackup.Configuration import Configuration
 
 
 class Backup:
     """ Backup """
 
-    CONFIG_FILENAME = '/etc/btrfs-sxbackup.conf'
-
     class Error(Exception):
         pass
-
-    class Configuration:
-        """ btrfs-sxbackup configuration file """
-
-        __KEY_SOURCE = 'source'
-        __KEY_SOURCE_CONTAINER = 'source-container'
-        __KEY_DESTINATION = 'destination'
-        __KEY_KEEP = 'keep'
-
-        def __init__(self, location=None):
-            """
-            c'tor
-            :param location: Location this configuration refers to/resides or none for global configuration file
-            """
-
-            self.location = location
-            self.source = None
-            self.source_container = None
-            self.destination = None
-            self.keep = KeepExpression('1w = 2/d, 2w = daily, 1m = weekly, 2m = none')
-
-        @staticmethod
-        def __section_name_by_location(location):
-            """
-            Delivers the default configuration section name by location instance/type
-            :param location: Location instance or None
-            :return: Section name string
-            """
-            if isinstance(location, Backup.SourceLocation):
-                return 'Source'
-            else:
-                if isinstance(location, Backup.DestinationLocation):
-                    return 'Destination'
-                else:
-                    return 'Global'
-
-        def read(self, fileobject):
-            cparser = ConfigParser()
-            cparser.read_file(fileobject)
-
-            section_name = self.__section_name_by_location(self.location)
-            self.source = cparser.get(section_name, self.__KEY_SOURCE, fallback=None)
-            self.source_container = cparser.get(section_name, self.__KEY_SOURCE_CONTAINER, fallback=None)
-            self.destination = cparser.get(section_name, self.__KEY_DESTINATION, fallback=None)
-            self.keep = cparser.get(section_name, self.__KEY_KEEP, fallback=self.keep)
-
-        def write(self, fileobject):
-            cparser = ConfigParser()
-
-            section_name = self.__section_name_by_location(self.location)
-            cparser.add_section(section_name)
-            if self.source is not None:
-                cparser.set(section_name, self.__KEY_SOURCE, self.source)
-            if self.source_container is not None:
-                cparser.set(section_name, self.__KEY_SOURCE_CONTAINER, self.source_container)
-            if self.destination is not None:
-                cparser.set(section_name, self.__KEY_DESTINATION, self.destination)
-            if self.keep is not None:
-                cparser.set(section_name, self.__KEY_KEEP, self.keep)
-            cparser.write(fileobject)
 
     class Location:
         """ Backup location """
 
         __TEMP_BACKUP_NAME = 'temp'
+        __CONFIG_FILENAME = '.btrfs-sxbackup'
+
+        class Configuration:
+            """ btrfs-sxbackup configuration file """
+
+            __KEY_SOURCE = 'source'
+            __KEY_SOURCE_CONTAINER = 'source-container'
+            __KEY_DESTINATION = 'destination'
+            __KEY_KEEP = 'keep'
+
+            def __init__(self, location=None):
+                """
+                c'tor
+                :param location: Location this configuration refers to/resides or none for global configuration file
+                """
+
+                self.location = location
+                self.source = None
+                self.source_container = None
+                self.destination = None
+                self.keep = KeepExpression('1w = 2/d, 2w = daily, 1m = weekly, 2m = none')
+
+            @staticmethod
+            def __section_name_by_location(location):
+                """
+                Delivers the default configuration section name by location instance/type
+                :param location: Location instance or None
+                :return: Section name string
+                """
+                if isinstance(location, Backup.SourceLocation):
+                    return 'Source'
+                else:
+                    if isinstance(location, Backup.DestinationLocation):
+                        return 'Destination'
+                    else:
+                        raise ValueError('Configuration does not support location instance type [%s]' % location)
+
+            def read(self, fileobject):
+                cparser = ConfigParser()
+                cparser.read_file(fileobject)
+
+                section_name = self.__section_name_by_location(self.location)
+                self.source = cparser.get(section_name, self.__KEY_SOURCE, fallback=None)
+                self.source_container = cparser.get(section_name, self.__KEY_SOURCE_CONTAINER, fallback=None)
+                self.destination = cparser.get(section_name, self.__KEY_DESTINATION, fallback=None)
+                self.keep = cparser.get(section_name, self.__KEY_KEEP, fallback=self.keep)
+
+            def write(self, fileobject):
+                cparser = ConfigParser()
+
+                section_name = self.__section_name_by_location(self.location)
+                cparser.add_section(section_name)
+                if self.source is not None:
+                    cparser.set(section_name, self.__KEY_SOURCE, self.source)
+                if self.source_container is not None:
+                    cparser.set(section_name, self.__KEY_SOURCE_CONTAINER, self.source_container)
+                if self.destination is not None:
+                    cparser.set(section_name, self.__KEY_DESTINATION, self.destination)
+                if self.keep is not None:
+                    cparser.set(section_name, self.__KEY_KEEP, self.keep)
+                cparser.write(fileobject)
 
         def __init__(self, url, container_subvolume, keep):
             """
@@ -96,14 +96,14 @@ class Backup:
             self.container_subvolume = os.path.join(url.path, container_subvolume)
             self.keep = keep
             self.snapshot_names = []
-            self.configuration_filename = os.path.join(self.container_subvolume, '.btrfs-sxbackup')
+            self.configuration_filename = os.path.join(self.container_subvolume, self.__CONFIG_FILENAME)
 
             # Path of subvolume for current backup run
             # Subvolumes will be renamed from temp to timestamp based name on both side if successful.
             self.temp_subvolume = os.path.join(self.container_subvolume, self.__TEMP_BACKUP_NAME)
 
             # Override configuration params
-            self.configuration = Backup.Configuration(self)
+            self.configuration = Backup.Location.Configuration(self)
 
         def __format_log_msg(self, msg):
             return '%s :: %s' % (self.get_name(), msg)
@@ -159,13 +159,14 @@ class Backup:
                 self.create_subprocess_args('btrfs sub list -o %s' % self.container_subvolume))
             # output is delivered as a byte sequence, decode to unicode string and split lines
             lines = output.decode().splitlines()
-            # extract snapshot names from btrfs sub list lines
 
+            # extract snapshot names from btrfs sub list lines
             def strip_name(l):
                 i = l.rfind(os.path.sep)
                 return l[i + 1:] if i >= 0 else l
 
             lines = map(lambda x: strip_name(x), lines)
+
             # sort and return
             snapshot_names = map(lambda sn: SnapshotName(sn), lines)
             self.snapshot_names = sorted(snapshot_names, key=lambda sn: sn.timestamp)
@@ -234,9 +235,10 @@ class Backup:
         def get_name(self):
             return 'Destination'
 
-    def __init__(self, source_url, source_container_subvolume, source_keep, dest_url, dest_keep):
+    def __init__(self, config, source_url, source_container_subvolume, source_keep, dest_url, dest_keep):
         """
         c'tor
+        :param config: Global configuration instance
         :param source_url: Source URL
         :param source_container_subvolume: Source container subvolume name
         :param source_keep: Source keep expression instance
@@ -246,6 +248,7 @@ class Backup:
         """
         self.__logger = logging.getLogger(self.__class__.__name__)
 
+        self.config = config
         self.source = Backup.SourceLocation(source_url, source_container_subvolume, source_keep)
         self.dest = Backup.DestinationLocation(dest_url, "", dest_keep)
 
@@ -279,10 +282,6 @@ class Backup:
         self.__logger.info(self.dest)
 
         starting_time = time.monotonic()
-        # Read global configuration
-        config = Backup.Configuration()
-        if os.path.exists(Backup.CONFIG_FILENAME):
-            config.read(open(Backup.CONFIG_FILENAME))
 
         # Prepare environments
         self.__logger.info('Preparing environment')

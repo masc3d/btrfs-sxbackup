@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 from urllib import parse
 
 from btrfs_sxbackup.Backup import Backup
+from btrfs_sxbackup.Configuration import Configuration
 from btrfs_sxbackup.KeepExpression import KeepExpression
 from btrfs_sxbackup import __version__
 
@@ -40,15 +41,21 @@ parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=ap
 parser.add_argument('--version', action='version', version='%s v%s' % (app_name, __version__))
 args = parser.parse_args()
 
+# Read global configuration
+config = Configuration()
+config.read()
+
 # Initialize logging
 logger = logging.getLogger()
 if not args.quiet:
     logger.addHandler(logging.StreamHandler(sys.stdout))
 log_syslog_handler = logging.handlers.SysLogHandler('/dev/log')
 log_syslog_handler.setFormatter(logging.Formatter(app_name + '[%(process)d] %(message)s'))
-log_syslog_handler.ident = args.log_ident+' '
 logger.addHandler(log_syslog_handler)
 logger.setLevel(logging.INFO)
+if args.log_ident is not None and len(args.log_ident) > 0:
+    log_syslog_handler.ident = args.log_ident + ' '
+
 logger.info('%s v%s' % (app_name, __version__))
 
 try:
@@ -60,6 +67,7 @@ try:
         source_container_subvolume = os.path.join(source_url.path, args.source_container_subvolume)
 
     backup = Backup(
+        config=config,
         source_url=source_url,
         source_container_subvolume=source_container_subvolume,
         source_keep=KeepExpression(args.source_keep),
