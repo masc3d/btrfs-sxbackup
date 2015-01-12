@@ -63,6 +63,9 @@ Cronhob performing a local and remote pull backup job
     30 2    * * *     root     btrfs-sxbackup / /mnt/backup/localsystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
     0 3     * * *     root     btrfs-sxbackup ssh://root@remotesystem/ /mnt/backup/remotesystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
 
+Synopsis and options
+====================
+
 .. code ::
 
     usage: btrfs-sxbackup [-h] [-c] [-q] [-sk SOURCE_KEEP] [-dk DESTINATION_KEEP]
