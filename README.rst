@@ -4,8 +4,9 @@ btrfs-sxbackup
 Btrfs snapshot backup utility
 
 * Push/pull support via SSH
-* Syslog logging
+* Housekeeping
 * Compression of transferred data
+* Syslog logging
 
 System dependencies
 ===================
@@ -40,22 +41,33 @@ Usage examples
 
 .. code ::
 
-    btrfs-sxbackup.py ssh://root@myhost.org:/ /backup/myhost
+    btrfs-sxbackup ssh://root@myhost.org:/ /backup/myhost
 
 Pulls snapshot backups of **/** on remote host **myhost.org** to local subvolume **/backup/myhost**
 
 .. code ::
 
-    btrfs-sxbackup.py / ssh://root@mybackupserver.org:/backup/myhost
+    btrfs-sxbackup / ssh://root@mybackupserver.org:/backup/myhost
 
 Pushes snapshot backups of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
 
+Cron example
+------------
+
 .. code ::
 
-    usage: btrfs-sxbackup [-h] [-sm SOURCE_MAX_SNAPSHOTS]
-                          [-dm DESTINATION_MAX_SNAPSHOTS]
-                          [-ss SOURCE_CONTAINER_SUBVOLUME] [-c] [-li LOG_IDENT]
-                          [-q] [--version]
+    # /etc/cron.d/btrfs-sxbackup
+    PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+    30 2    * * *     root     btrfs-sxbackup / /mnt/backup/localsystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
+    0 3     * * *     root     btrfs-sxbackup ssh://root@remotesystem/ /mnt/backup/remotesystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
+
+Example cronhob performing a local and remote pull backup job
+
+.. code ::
+
+    usage: btrfs-sxbackup [-h] [-c] [-q] [-sk SOURCE_KEEP] [-dk DESTINATION_KEEP]
+                          [-ss SOURCE_CONTAINER_SUBVOLUME] [-li LOG_IDENT]
+                          [--version]
                           source_subvolume destination_container_subvolume
 
     positional arguments:
@@ -66,20 +78,26 @@ Pushes snapshot backups of local subvolume **/** to remote subvolume **/backup/m
 
     optional arguments:
       -h, --help            show this help message and exit
-      -sm SOURCE_MAX_SNAPSHOTS, --source-max-snapshots SOURCE_MAX_SNAPSHOTS
-                            Maximum number of source snapshots to keep (defaults
-                            to 10).
-      -dm DESTINATION_MAX_SNAPSHOTS, --destination-max-snapshots DESTINATION_MAX_SNAPSHOTS
-                            Maximum number of destination snapshots to keep
-                            (defaults to 10).
+      -c, --compress        Enables compression during transmission, requires lzop
+                            to be installed on both source and destination
+      -q, --quiet           Do not log to STDOUT
+      -sk SOURCE_KEEP, --source-keep SOURCE_KEEP
+                            Expression defining which source snapshots to
+                            keep/cleanup. Can be a static number (of backups) or
+                            more complex expression like "1d=4/d,1w=daily,2m=none"
+                            literally translating to: "1 day from now keep 4
+                            backups a day, 1 week from now keep daily backups, 2
+                            months from now keep none". Default is 10
+      -dk DESTINATION_KEEP, --destination-keep DESTINATION_KEEP
+                            Expression defining which destination snapshots to
+                            keep/cleanup. Can be a static number (of backups) or
+                            more complex expression (see --source-keep arguemnt).
+                            Default is 10
       -ss SOURCE_CONTAINER_SUBVOLUME, --source-container-subvolume SOURCE_CONTAINER_SUBVOLUME
                             Override path to source snapshot container subvolume.
-                            Both absolute and relative paths are possible.
-                            (defaults to 'sxbackup', relative to source subvolume)
-      -c, --compress        Enables compression, requires lzop to be installed on
-                            both source and destination
+                            Both absolute and relative paths are possible. Default
+                            is 'sxbackup', relative to source subvolume
       -li LOG_IDENT, --log-ident LOG_IDENT
                             Log ident used for syslog logging, defaults to script
                             name
-      -q, --quiet           Do not log to STDOUT
       --version             show program's version number and exit
