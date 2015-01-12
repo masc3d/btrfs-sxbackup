@@ -51,8 +51,8 @@ Push snapshot backups of local subvolume **/** to remote subvolume **/backup/myh
 
     btrfs-sxbackup / ssh://root@mybackupserver.org:/backup/myhost
 
-Cron example
-------------
+Cron
+----
 
 Cronhob performing a local and remote pull backup job
 
