@@ -370,11 +370,17 @@ class Backup:
             send_returncode = send_process.poll()
 
             if receive_returncode is not None and receive_returncode != 0:
-                send_process.kill()
+                try:
+                    send_process.kill()
+                except ProcessLookupError:
+                    pass
                 break
 
             if send_returncode is not None and send_returncode != 0:
-                receive_process.kill()
+                try:
+                    receive_process.kill()
+                except ProcessLookupError:
+                    pass
                 break
 
             time.sleep(2)

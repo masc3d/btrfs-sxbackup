@@ -53,7 +53,7 @@ class KeepExpression:
 
     class ApplicableInterval:
         """
-        Interval which relates to a specific time and has filtering capabilities
+        Applicable interval, relative to a timestamp
         """
         def __init__(self, start, duration, amount):
             self.start = start
@@ -102,8 +102,13 @@ class KeepExpression:
             :param lambda_timestamp: Lambda to return timestamp for each item
             :return: (items, to_keep, to_remove) The items which have not matched and one list items to keep/remove
             """
-            (items, interval_items) = splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
-            (to_keep, to_remove) = self.__reduce(interval_items, self.amount)
+            if self.end is not None:
+                (items, interval_items) = splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
+                (to_keep, to_remove) = self.__reduce(interval_items, self.amount)
+            else:
+                to_keep = items[:self.amount]
+                to_remove = items[self.amount:]
+                items = list()
 
             return items, to_keep, to_remove
 
@@ -114,8 +119,8 @@ class KeepExpression:
         def __init__(self, condition, next_condition, start_time):
             self.age = condition.age
             self.interval_amount = condition.interval_amount
-            self.condition_start = start_time - condition.age
-            self.interval_start = self.condition_start
+            self.start_time = start_time - condition.age
+            self.interval_start = self.start_time
 
             # Calculate interval duration using next condition if needed
             interval_duration = condition.interval_duration
@@ -128,54 +133,52 @@ class KeepExpression:
             self.interval_duration = interval_duration
 
             # Calculate condition and interval end
-            condition_end = None
+            end_time = None
             interval_end = self.interval_start - self.interval_duration if self.interval_duration is not None else None
             if next_condition is not None:
-                condition_end = start_time - next_condition.age
+                end_time = start_time - next_condition.age
                 # Limit end of interval to end of condition
-                if interval_end is not None and interval_end < condition_end:
-                    interval_end = condition_end
+                if interval_end is not None and interval_end < end_time:
+                    interval_end = end_time
 
             self.interval_end = interval_end
-            self.condition_end = condition_end
+            self.end_time = end_time
 
         def __str__(self):
             return 'age [%s] interval duration [%s] interval amount [%s]' % (self.age, self.interval_duration, self.interval_amount)
 
-        def interval_by_timestamp(self, timestamp):
+        def create_interval_by_timestamp(self, timestamp):
             """
-            Creates an applicable interval for the given timestamp
-            If timestamp is out of range of the condition start/end time this method will return None
+            Creates an appropriate applicable interval within this condition timeframe
             :param timestamp: Timestamp
             :return: ApplicableInterval or None if timestamp out of bounds of the condition start/end time
             """
-            if timestamp > self.condition_start or \
-                    (self.condition_end is not None and timestamp <= self.condition_end):
+            if timestamp > self.start_time or \
+                    (self.end_time is not None and timestamp <= self.end_time):
                 return None
 
             if self.interval_duration is None:
-                return KeepExpression.ApplicableInterval(self.condition_start,
+                return KeepExpression.ApplicableInterval(self.start_time,
                                                          self.interval_duration,
                                                          self.interval_amount)
 
             # Calculate interval factor
-            f = math.floor((self.condition_start - timestamp) / self.interval_duration)
+            f = math.floor((self.start_time - timestamp) / self.interval_duration)
 
-            return KeepExpression.ApplicableInterval(self.condition_start - f * self.interval_duration,
+            return KeepExpression.ApplicableInterval(self.start_time - f * self.interval_duration,
                                                      self.interval_duration,
                                                      self.interval_amount)
 
     def __create_applicable_conditions(self, start_time):
         """
-        Create applicable conditions from this keep expressions
+        Create applicable conditions from this keep expression
         :param start_time: Start time for conditions
         :return: List of applicable conditions
         """
-        result = list()
-        for i in range(0, len(self.conditions)):
-            next_condition = self.conditions[i+1] if i < len(self.conditions) - 1 else None
-            result.append(KeepExpression.ApplicableCondition(self.conditions[i], next_condition, start_time))
-        return result
+        return list(map(lambda i: KeepExpression.ApplicableCondition(
+            self.conditions[i],
+            self.conditions[i+1] if i < len(self.conditions) - 1 else None,
+            start_time), range(0, len(self.conditions))))
 
     def __init__(self, expression):
         """
@@ -188,22 +191,22 @@ class KeepExpression:
 
         # Parse keep expression string
         # Split criteria list
-        criterias = expression.split(',')
-        for criteria in criterias:
+        criteria = expression.split(',')
+        for c in criteria:
             # Parse criteria expression
-            criteria = criteria.strip()
-            cparts = criteria.split('=')
-            if len(cparts) != 2:
+            c = c.strip()
+            c_parts = c.split('=')
+            if len(c_parts) != 2:
                 try:
                     age = timedelta(0)
                     interval_duration = None
-                    interval_amount = int(criteria)
+                    interval_amount = int(c)
                 except:
                     raise ValueError('Criteria must consist of age and interval separated by equality operator [%s]'
-                                     % criteria)
+                                     % c)
             else:
-                age_literal = cparts[0].strip()
-                keep_literal = cparts[1].strip()
+                age_literal = c_parts[0].strip()
+                keep_literal = c_parts[1].strip()
 
                 # Parse age (examples: 4d, 4w, 30 ..)
                 match = self.__age_re.match(age_literal)
@@ -267,24 +270,23 @@ class KeepExpression:
             item_timestamp = lambda_timestamp(items[0])
             condition = conditions[0]
 
-            interval = condition.interval_by_timestamp(item_timestamp)
+            # Get interval for current condition
+            interval = condition.create_interval_by_timestamp(item_timestamp)
             if interval is None:
+                # Condition out of range, try next one
                 conditions.pop(0)
                 continue
 
-            if condition not in items_to_remove_by_condition:
-                items_to_remove_by_condition[condition] = list()
+            items_to_remove = list()
 
-            items_to_remove = items_to_remove_by_condition[condition]
+            (items, to_keep, to_remove) = interval.filter(items, lambda_timestamp)
+            items_to_keep.extend(to_keep)
+            items_to_remove.extend(to_remove)
 
-            if interval.end is not None:
-                (items, to_keep, to_remove) = interval.filter(items, lambda_timestamp)
-
-                items_to_keep.extend(to_keep)
-                items_to_remove.extend(to_remove)
-            else:
-                items_to_keep.extend(items[:interval.amount])
-                items_to_remove.extend(items[interval.amount:])
-                items.clear()
+            if len(items_to_remove) > 0:
+                if condition not in items_to_remove_by_condition:
+                    items_to_remove_by_condition[condition] = items_to_remove
+                else:
+                    items_to_remove_by_condition[condition].extend(items_to_remove)
 
         return items_to_remove_by_condition, items_to_keep

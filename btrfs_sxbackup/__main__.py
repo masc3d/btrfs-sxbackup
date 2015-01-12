@@ -19,19 +19,24 @@ parser.add_argument('source_subvolume', type=str,
                     help='Source subvolume to backup. Local path or SSH url.')
 parser.add_argument('destination_container_subvolume', type=str,
                     help='Destination subvolume receiving snapshots. Local path or SSH url.')
-parser.add_argument('-sk', '--source-keep', type=str, default='10',
-                    help='Expression defining source snapshots to keep.')
-parser.add_argument('-dk', '--destination-keep', type=str, default='10',
-                    help='Expression defining destination snapshots to keep.')
-parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup',
-                    help='Override path to source snapshot container subvolume. Both absolute and relative paths\
-                     are possible. (defaults to \'sxbackup\', relative to source subvolume)')
 parser.add_argument('-c', '--compress', action='store_true',
-                    help='Enables compression, requires lzop to be installed on both source and destination')
-parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=app_name,
-                    help='Log ident used for syslog logging, defaults to script name')
+                    help='Enables compression during transmission, requires lzop to be installed on both source'
+                         ' and destination')
 parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
                     help='Do not log to STDOUT')
+parser.add_argument('-sk', '--source-keep', type=str, default='10',
+                    help='Expression defining which source snapshots to keep/cleanup. Can be a static number'
+                         ' (of backups) or more complex expression like "1d=4/d,1w=daily,2m=none" literally'
+                         ' translating to: "1 day from now keep 4 backups a day, 1 week from now keep daily backups,'
+                         ' 2 months from now keep none". Default is 10')
+parser.add_argument('-dk', '--destination-keep', type=str, default='10',
+                    help='Expression defining which destination snapshots to keep/cleanup. Can be a static number'
+                         ' (of backups) or more complex expression (see --source-keep arguemnt). Default is 10')
+parser.add_argument('-ss', '--source-container-subvolume', type=str, default='sxbackup',
+                    help='Override path to source snapshot container subvolume. Both absolute and relative paths\
+                     are possible. Default is \'sxbackup\', relative to source subvolume')
+parser.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=app_name,
+                    help='Log ident used for syslog logging, defaults to script name')
 parser.add_argument('--version', action='version', version='%s v%s' % (app_name, __version__))
 args = parser.parse_args()
 
@@ -68,9 +73,10 @@ try:
 except SystemExit as e:
     if e.code != 0:
         raise
-except:
-    logger.error('ERROR {0} {1}'.format(sys.exc_info(), traceback.extract_tb(sys.exc_info()[2])))
-    raise
+except BaseException as e:
+    logger.error('ERROR: %s' % e)
+    logger.error(traceback.format_exc())
+    exit(1)
 
 exit(0)
 
