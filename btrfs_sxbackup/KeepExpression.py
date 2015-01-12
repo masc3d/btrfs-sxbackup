@@ -263,8 +263,6 @@ class KeepExpression:
         (items, recent_items) = splice(items, lambda i: lambda_timestamp(i) > (now - self.conditions[0].age))
         items_to_keep.extend(recent_items)
 
-        print(len(recent_items))
-
         while len(items) > 0 and len(conditions) > 0:
             item_timestamp = lambda_timestamp(items[0])
             condition = conditions[0]
