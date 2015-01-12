@@ -169,7 +169,7 @@ class Backup:
 
             # sort and return
             snapshot_names = map(lambda sn: SnapshotName(sn), lines)
-            self.snapshot_names = sorted(snapshot_names, key=lambda sn: sn.timestamp)
+            self.snapshot_names = sorted(snapshot_names, key=lambda sn: sn.timestamp, reverse=True)
             return self.snapshot_names
 
         def cleanup_snapshots(self):
