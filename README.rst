@@ -56,7 +56,7 @@ Push snapshot backups of local subvolume **/** to remote subvolume **/backup/myh
 Cron
 ----
 
-Cronhob performing a local and remote pull backup job
+Cronhob performing a local and remote pull backup job with source and destination housekeeping
 
 .. code ::
 
