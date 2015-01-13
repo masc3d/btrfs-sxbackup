@@ -42,7 +42,7 @@ class Backup:
                 self.source = None
                 self.source_container = None
                 self.destination = None
-                self.keep = KeepExpression('1w = 2/d, 2w = daily, 1m = weekly, 2m = none')
+                self.keep = KeepExpression('1w:2/d, 2w:daily, 1m:weekly, 2m:none')
 
             @staticmethod
             def __section_name_by_location(location):
@@ -60,29 +60,29 @@ class Backup:
                         raise ValueError('Configuration does not support location instance type [%s]' % location)
 
             def read(self, fileobject):
-                cparser = ConfigParser()
-                cparser.read_file(fileobject)
+                parser = ConfigParser()
+                parser.read_file(fileobject)
 
                 section_name = self.__section_name_by_location(self.location)
-                self.source = cparser.get(section_name, self.__KEY_SOURCE, fallback=None)
-                self.source_container = cparser.get(section_name, self.__KEY_SOURCE_CONTAINER, fallback=None)
-                self.destination = cparser.get(section_name, self.__KEY_DESTINATION, fallback=None)
-                self.keep = cparser.get(section_name, self.__KEY_KEEP, fallback=self.keep)
+                self.source = parser.get(section_name, self.__KEY_SOURCE, fallback=None)
+                self.source_container = parser.get(section_name, self.__KEY_SOURCE_CONTAINER, fallback=None)
+                self.destination = parser.get(section_name, self.__KEY_DESTINATION, fallback=None)
+                self.keep = parser.get(section_name, self.__KEY_KEEP, fallback=self.keep)
 
             def write(self, fileobject):
-                cparser = ConfigParser()
+                parser = ConfigParser()
 
                 section_name = self.__section_name_by_location(self.location)
-                cparser.add_section(section_name)
+                parser.add_section(section_name)
                 if self.source is not None:
-                    cparser.set(section_name, self.__KEY_SOURCE, self.source)
+                    parser.set(section_name, self.__KEY_SOURCE, self.source)
                 if self.source_container is not None:
-                    cparser.set(section_name, self.__KEY_SOURCE_CONTAINER, self.source_container)
+                    parser.set(section_name, self.__KEY_SOURCE_CONTAINER, self.source_container)
                 if self.destination is not None:
-                    cparser.set(section_name, self.__KEY_DESTINATION, self.destination)
+                    parser.set(section_name, self.__KEY_DESTINATION, self.destination)
                 if self.keep is not None:
-                    cparser.set(section_name, self.__KEY_KEEP, self.keep)
-                cparser.write(fileobject)
+                    parser.set(section_name, self.__KEY_KEEP, self.keep)
+                parser.write(fileobject)
 
         def __init__(self, url, container_subvolume, keep):
             """
@@ -180,7 +180,7 @@ class Backup:
                 for c in to_remove_by_condition.keys():
                     to_remove = to_remove_by_condition[c]
 
-                    self.log_info('Removing %d snapshot(s) due to condition %s: %s'
+                    self.log_info('Removing %d snapshot(s) due to condition [%s]: %s'
                                   % (len(to_remove), str(c), list(map(lambda x: str(x), to_remove))))
                     subprocess.check_output(
                         self.create_subprocess_args(self.create_cleanup_bash_command(to_remove)))
@@ -206,8 +206,8 @@ class Backup:
             self.configuration.read(out.decode().splitlines())
 
         def __str__(self):
-            return self.__format_log_msg('Url [%s] snapshot container subvolume [%s]'
-                                         % (self.url.geturl(), self.container_subvolume))
+            return self.__format_log_msg('Url [%s] snapshot container subvolume [%s] keep [%s]'
+                                         % (self.url.geturl(), self.container_subvolume, self.keep))
 
     class SourceLocation(Location):
         """ Source location """

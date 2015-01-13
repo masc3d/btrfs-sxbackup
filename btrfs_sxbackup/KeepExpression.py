@@ -24,22 +24,82 @@ def splice(items_to_splice, lambda_condition):
 
 class KeepExpression:
     """
-    Represents a sequence of conditions describing which backups to keep
-    """
-    __kd = {'h': timedelta(hours=1),
-            'd': timedelta(days=1),
-            'w': timedelta(days=7),
-            'm': timedelta(days=30),
-            'n': None}
+    Represents a sequence of conditions describing which backups to keep.
+    Each regular condition is defined as <age>:<ratio>
 
-    __keep_re = re.compile('^([0-9]+)(/([hdwm]{1}))?$', re.IGNORECASE)
-    __age_re = re.compile('^([0-9]+)([hdwm]{1})?$', re.IGNORECASE)
+    Age is defined as: <amount><time span literal> where time span is one of h, d, w or m (hours, days, weeks or months)
+    Examples for age: 6h, 4d, 1w, 2m
+
+    Ratio is defined as: <amount>/<time span literal> where time span is one of h, d, w or m (hours, days, weeks, or
+    months)
+    Examples for ratio: 1/d, 3/w, 10/m (read 1 per day, 3 per week, 10 per month)
+
+    Example for a full keep expression: 1d:4/d, 1w:1/d, 1m:1/w, 2m:none
+    Translating to: after 1 day, keep 4 per day, after 1 week keep one per day, after 1 month keep 1 per week, after 2
+    months keep none
+
+    Special cases:
+    * A ratio can be a static numbers, defining a static number of backups without timespan
+    * An entire condition can be a static number, defining a static number of backups without timespan and age
+    """
 
     class Condition:
         """
         Each condition of a keep expression reflects how many backups to keep after a specific amount of time
         """
-        def __init__(self, age, interval_duration, interval_amount):
+
+        __kd = {'h': timedelta(hours=1),
+                'd': timedelta(days=1),
+                'w': timedelta(days=7),
+                'm': timedelta(days=30),
+                'n': None}
+
+        __keep_re = re.compile('^([0-9]+)(/([hdwm]{1}))?$', re.IGNORECASE)
+        __age_re = re.compile('^([0-9]+)([hdwm]{1})?$', re.IGNORECASE)
+
+        def __init__(self, cr):
+            self.text = cr
+
+            # Parse criteria expression
+            c_parts = cr.split(':')
+            if len(c_parts) != 2:
+                try:
+                    age = timedelta(0)
+                    interval_duration = None
+                    interval_amount = int(cr)
+                except:
+                    raise ValueError('Criteria must consist of age and interval separated by colon [%s]'
+                                     % cr)
+            else:
+                age_literal = c_parts[0].strip()
+                keep_literal = c_parts[1].strip()
+
+                # Parse age (examples: 4d, 4w, 30 ..)
+                match = self.__age_re.match(age_literal)
+                if match is None:
+                    raise ValueError('Invalid age [%s]' % age_literal)
+
+                if match.group(2) is not None:
+                    # Time literal part of age
+                    age = int(match.group(1)) * self.__kd[match.group(2)]
+                else:
+                    # Plain number of hours
+                    age = timedelta(hours=int(match.group(1)))
+
+                # Parse keep expression (examples: 4/d, 4/w, 20 ..)
+                if keep_literal[0] in self.__kd:
+                    interval_duration = self.__kd[keep_literal[0]]
+                    interval_amount = 1 if interval_duration is not None else 0
+                else:
+                    match = self.__keep_re.match(keep_literal)
+                    if match is None:
+                        raise ValueError('Invalid keep [%s]' % keep_literal)
+                    interval_amount = int(match.group(1))
+                    if match.group(3) is None:
+                        interval_duration = None
+                    else:
+                        interval_duration = self.__kd[str(match.group(3)[0])]
+
             self.age = age
             self.interval_duration = interval_duration
             self.interval_amount = interval_amount
@@ -49,7 +109,7 @@ class KeepExpression:
                    % (self.age, self.interval_amount, self.interval_duration)
 
         def __str__(self):
-            return 'age [%s] interval [%s] amount [%s]' % (self.age, self.interval_duration, self.interval_amount)
+            return self.text
 
     class ApplicableInterval:
         """
@@ -117,9 +177,10 @@ class KeepExpression:
         Applicable condition, relative to a timestamp
         """
         def __init__(self, condition, next_condition, start_time):
+            self.text = condition.text
             self.age = condition.age
-            self.interval_amount = condition.interval_amount
             self.start_time = start_time - condition.age
+            self.interval_amount = condition.interval_amount
             self.interval_start = self.start_time
 
             # Calculate interval duration using next condition if needed
@@ -145,7 +206,7 @@ class KeepExpression:
             self.end_time = end_time
 
         def __str__(self):
-            return 'age [%s] interval duration [%s] interval amount [%s]' % (self.age, self.interval_duration, self.interval_amount)
+            return self.text
 
         def create_interval_by_timestamp(self, timestamp):
             """
@@ -186,59 +247,24 @@ class KeepExpression:
         :param expression: Expression string defining multiple criteria for keeping backups
         """
         expression = str(expression)
-        self.expression_text = expression
         conditions = list()
 
         # Parse keep expression string
         # Split criteria list
         criteria = expression.split(',')
-        for c in criteria:
-            # Parse criteria expression
-            c = c.strip()
-            c_parts = c.split('=')
-            if len(c_parts) != 2:
-                try:
-                    age = timedelta(0)
-                    interval_duration = None
-                    interval_amount = int(c)
-                except:
-                    raise ValueError('Criteria must consist of age and interval separated by equality operator [%s]'
-                                     % c)
-            else:
-                age_literal = c_parts[0].strip()
-                keep_literal = c_parts[1].strip()
 
-                # Parse age (examples: 4d, 4w, 30 ..)
-                match = self.__age_re.match(age_literal)
-                if match is None:
-                    raise ValueError('Invalid age [%s]' % age_literal)
+        # Strip criteria of whitespaces and reformat expression text
+        criteria = list(map(lambda x: x.strip(), criteria))
+        self.expression_text = ', '.join(criteria)
 
-                if match.group(2) is not None:
-                    # Time literal part of age
-                    age = int(match.group(1)) * self.__kd[match.group(2)]
-                else:
-                    # Plain number of hours
-                    age = timedelta(hours=int(match.group(1)))
-
-                # Parse keep expression (examples: 4/d, 4/w, 20 ..)
-                if keep_literal[0] in self.__kd:
-                    interval_duration = self.__kd[keep_literal[0]]
-                    interval_amount = 1 if interval_duration is not None else 0
-                else:
-                    match = self.__keep_re.match(keep_literal)
-                    if match is None:
-                        raise ValueError('Invalid keep [%s]' % keep_literal)
-                    interval_amount = int(match.group(1))
-                    if match.group(3) is None:
-                        interval_duration = None
-                    else:
-                        interval_duration = self.__kd[str(match.group(3)[0])]
-
-            condition = KeepExpression.Condition(age, interval_duration, interval_amount)
-            conditions.append(condition)
+        # Iterate and parse
+        conditions = list(map(lambda x: KeepExpression.Condition(x), criteria))
 
         # Conditions sorted by age
         self.conditions = sorted(conditions, key=lambda c: c.age)
+
+    def __str__(self):
+        return self.expression_text
 
     def filter(self, items: list, lambda_timestamp):
         """

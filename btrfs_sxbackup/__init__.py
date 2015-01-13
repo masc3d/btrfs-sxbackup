@@ -1,4 +1,4 @@
-__version__ = '0.4.4'
+__version__ = '0.4.5'
 __author__ = 'Marco Schindler, Bernd Michael Helm'
 __email__ = 'masc@disappear.de'
 __maintainer__ = 'masc@disappear.de'

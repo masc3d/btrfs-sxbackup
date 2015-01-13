@@ -19,7 +19,7 @@ class TestKeepExpression(unittest.TestCase):
         self.snapshot_names = snapshot_names
 
     def test_filter(self):
-        k = KeepExpression('1d = 4/d, 4d = daily, 1w = 2/d, 1m = weekly, 3m = none')
+        k = KeepExpression('1d:4/d, 4d:daily, 1w:2/d, 1m:weekly, 3m:none')
         #k = KeepExpression('10')
 
         start = time.perf_counter()
