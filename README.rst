@@ -36,7 +36,7 @@ Installation
 
 Setup
 =====
-* when using ssh, public/private key authentication should be set up
+* When using ssh, public/private key authentication should be set up
 
 Usage examples
 ==============
@@ -62,8 +62,8 @@ Cronhob performing a local and remote pull backup job
 
     # /etc/cron.d/btrfs-sxbackup
     PATH="/usr/sbin:/usr/bin:/sbin:/bin"
-    30 2    * * *     root     btrfs-sxbackup / /mnt/backup/localsystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
-    0 3     * * *     root     btrfs-sxbackup ssh://root@remotesystem/ /mnt/backup/remotesystem/ -sk 3 -dk "1d = 4/d, 1w = daily, 2m = none"
+    30 2    * * *     root     btrfs-sxbackup / /mnt/backup/localsystem/ -sk 3 -dk "1d:4/d, 1w:daily, 2m:none"
+    0 3     * * *     root     btrfs-sxbackup ssh://root@remotesystem/ /mnt/backup/remotesystem/ -sk 3 -dk "1d:4/d, 1w:daily, 2m:none"
 
 Synopsis and options
 ====================
@@ -89,7 +89,7 @@ Synopsis and options
       -sk SOURCE_KEEP, --source-keep SOURCE_KEEP
                             Expression defining which source snapshots to
                             keep/cleanup. Can be a static number (of backups) or
-                            more complex expression like "1d=4/d,1w=daily,2m=none"
+                            more complex expression like "1d:4/d, 1w:daily, 2m:none"
                             literally translating to: "1 day from now keep 4
                             backups a day, 1 week from now keep daily backups, 2
                             months from now keep none". Default is 10

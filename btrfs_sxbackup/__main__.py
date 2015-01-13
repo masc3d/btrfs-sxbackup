@@ -27,7 +27,7 @@ parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=
                     help='Do not log to STDOUT')
 parser.add_argument('-sk', '--source-keep', type=str, default='10',
                     help='Expression defining which source snapshots to keep/cleanup. Can be a static number'
-                         ' (of backups) or more complex expression like "1d=4/d,1w=daily,2m=none" literally'
+                         ' (of backups) or more complex expression like "1d:4/d, 1w:daily, 2m:none" literally'
                          ' translating to: "1 day from now keep 4 backups a day, 1 week from now keep daily backups,'
                          ' 2 months from now keep none". Default is 10')
 parser.add_argument('-dk', '--destination-keep', type=str, default='10',

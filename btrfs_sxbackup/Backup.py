@@ -9,7 +9,6 @@ from datetime import datetime
 from configparser import ConfigParser
 from btrfs_sxbackup.SnapshotName import SnapshotName
 from btrfs_sxbackup.KeepExpression import KeepExpression
-from btrfs_sxbackup.Configuration import Configuration
 
 
 class Backup:
