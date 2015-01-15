@@ -93,9 +93,8 @@ try:
         source_container_subvolume=source_container_subvolume,
         source_keep=KeepExpression(args.source_keep),
         dest_url=dest_url,
-        dest_keep=KeepExpression(args.destination_keep))
-
-    backup.compress = args.compress
+        dest_keep=KeepExpression(args.destination_keep),
+        compress=args.compress)
 
     # Perform actual backup
     backup.run()
