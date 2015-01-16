@@ -1,4 +1,6 @@
+import logging
 import unittest
+import sys
 import time
 from datetime import datetime
 from datetime import timedelta
@@ -8,6 +10,10 @@ from btrfs_sxbackup.KeepExpression import KeepExpression
 
 class TestKeepExpression(unittest.TestCase):
     def setUp(self):
+        logger = logging.getLogger()
+        logger.addHandler(logging.StreamHandler(sys.stdout))
+        logger.setLevel(logging.DEBUG)
+
         # Generate series of snapshot names
         snapshot_names = list()
         now = datetime.utcnow()

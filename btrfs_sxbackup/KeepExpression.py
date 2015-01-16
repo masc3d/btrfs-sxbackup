@@ -1,4 +1,5 @@
 import collections
+import logging
 import math
 import re
 from datetime import datetime
@@ -57,52 +58,58 @@ class KeepExpression:
         __keep_re = re.compile('^([0-9]+)(/([hdwm]))?$', re.IGNORECASE)
         __age_re = re.compile('^([0-9]+)([hdwm])?$', re.IGNORECASE)
 
-        def __init__(self, cr):
-            self.__text = cr
+        def __init__(self, age: timedelta, interval_duration: timedelta, interval_amount: int, text: str):
+            self.__text = text
+            self.__age = age
+            self.__interval_duration = interval_duration
+            self.__interval_amount = interval_amount
 
+        @staticmethod
+        def parse(text):
             # Parse criteria expression
-            c_parts = cr.split(':')
+            c_parts = text.split(':')
             if len(c_parts) != 2:
                 try:
                     age = timedelta(0)
                     interval_duration = None
-                    interval_amount = int(cr)
+                    interval_amount = int(text)
                 except:
                     raise ValueError('Criteria must consist of age and interval separated by colon [%s]'
-                                     % cr)
+                                     % text)
             else:
                 age_literal = c_parts[0].strip()
                 keep_literal = c_parts[1].strip()
 
                 # Parse age (examples: 4d, 4w, 30 ..)
-                match = self.__age_re.match(age_literal)
+                match = KeepExpression.Condition.__age_re.match(age_literal)
                 if match is None:
                     raise ValueError('Invalid age [%s]' % age_literal)
 
                 if match.group(2) is not None:
                     # Time literal part of age
-                    age = int(match.group(1)) * self.__kd[match.group(2)]
+                    age = int(match.group(1)) * KeepExpression.Condition.__kd[match.group(2)]
                 else:
                     # Plain number of hours
                     age = timedelta(hours=int(match.group(1)))
 
                 # Parse keep expression (examples: 4/d, 4/w, 20 ..)
-                if keep_literal[0] in self.__kd:
-                    interval_duration = self.__kd[keep_literal[0]]
+                if keep_literal[0] in KeepExpression.Condition.__kd:
+                    interval_duration = KeepExpression.Condition.__kd[keep_literal[0]]
                     interval_amount = 1 if interval_duration is not None else 0
                 else:
-                    match = self.__keep_re.match(keep_literal)
+                    match = KeepExpression.Condition.__keep_re.match(keep_literal)
                     if match is None:
                         raise ValueError('Invalid keep [%s]' % keep_literal)
                     interval_amount = int(match.group(1))
                     if match.group(3) is None:
                         interval_duration = None
                     else:
-                        interval_duration = self.__kd[str(match.group(3)[0])]
+                        interval_duration = KeepExpression.Condition.__kd[str(match.group(3)[0])]
 
-            self.__age = age
-            self.__interval_duration = interval_duration
-            self.__interval_amount = interval_amount
+            return KeepExpression.Condition(age=age,
+                                            interval_duration=interval_duration,
+                                            interval_amount=interval_amount,
+                                            text=text)
 
         @property
         def text(self):
@@ -122,10 +129,10 @@ class KeepExpression:
 
         def __repr__(self):
             return 'Condition(age=%s, keep_amount=%s, keep_interval=%s)' \
-                   % (self.__age, self.__interval_amount, self.__interval_duration)
+                   % (self.age, self.interval_amount, self.interval_duration)
 
         def __str__(self):
-            return self.__text
+            return self.text
 
     class ApplicableInterval:
         """
@@ -136,10 +143,6 @@ class KeepExpression:
             self.__duration = duration
             self.__amount = amount
             self.__end = self.__start - self.__duration if self.__duration is not None else None
-
-        def __repr__(self):
-            return 'ApplicableInterval(start=%s, duration=%s, amount=%s)' \
-                   % (self.__start, self.__duration, self.__amount)
 
         @property
         def start(self):
@@ -156,6 +159,10 @@ class KeepExpression:
         @property
         def end(self):
             return self.__end
+
+        def __repr__(self):
+            return 'ApplicableInterval(start=%s, duration=%s, amount=%s, end=%s)' \
+                   % (self.start, self.duration, self.amount, self.end)
 
         def __reduce(self, items, max_amount):
             """
@@ -194,83 +201,57 @@ class KeepExpression:
             :param lambda_timestamp: Lambda to return timestamp for each item
             :return: (items, to_keep, to_remove) The items which have not matched and one list items to keep/remove
             """
-            if self.__end is not None:
-                (items, interval_items) = splice(items, lambda i: self.__start >= lambda_timestamp(i) > self.__end)
-                (to_keep, to_remove) = self.__reduce(interval_items, self.__amount)
+            if self.end is not None:
+                (items, interval_items) = splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
+                (to_keep, to_remove) = self.__reduce(interval_items, self.amount)
             else:
-                to_keep = items[:self.__amount]
-                to_remove = items[self.__amount:]
+                to_keep = items[:self.amount]
+                to_remove = items[self.amount:]
                 items = list()
 
             return items, to_keep, to_remove
 
-    class ApplicableCondition:
+    class ApplicableCondition(Condition):
         """
         Applicable condition, relative to a timestamp
         """
-        def __init__(self, condition, next_condition, start_time):
-            self.__text = condition.text
-            self.__age = condition.age
-            self.__start_time = start_time - condition.age
-            self.__interval_amount = condition.interval_amount
-            self.__interval_start = self.__start_time
+        def __init__(self, condition, initial_time, end_time):
+            super().__init__(age=condition.age,
+                             interval_duration=condition.interval_duration,
+                             interval_amount=condition.interval_amount,
+                             text=condition.text)
+            self.__condition = condition
+            self.__initial_time = initial_time
+            self.__start_time = initial_time - condition.age
+            self.__end_time = end_time
 
             # Calculate interval duration using next condition if needed
             interval_duration = condition.interval_duration
             if interval_duration is None:
                 # If keep interval is not defined (static number of items)
                 # calculate the interval -> difference to subsequent condition
-                if next_condition is not None:
-                    interval_duration = next_condition.age - condition.age
+                if self.__end_time is not None:
+                    interval_duration = self.__start_time - self.__end_time
 
             self.__interval_duration = interval_duration
 
-            # Calculate condition and interval end
-            end_time = None
-            interval_end = self.__interval_start - self.__interval_duration if self.__interval_duration is not None else None
-            if next_condition is not None:
-                end_time = start_time - next_condition.age
-                # Limit end of interval to end of condition
-                if interval_end is not None and interval_end < end_time:
-                    interval_end = end_time
-
-            self.__interval_end = interval_end
             self.__end_time = end_time
 
         @property
-        def text(self):
-            return self.__text
-
-        @property
-        def age(self):
-            return self.__age
+        def initial_time(self):
+            return self.__initial_time
 
         @property
         def start_time(self):
             return self.__start_time
 
         @property
-        def interval_amount(self):
-            return self.__interval_amount
-
-        @property
-        def interval_start(self):
-            return self.__interval_start
-
-        @property
-        def interval_duration(self):
-            return self.__interval_duration
-
-        @property
-        def interval_end(self):
-            return self.__interval_end
-
-        @property
         def end_time(self):
             return self.__end_time
 
-        def __str__(self):
-            return self.__text
+        def __repr__(self):
+            return 'ApplicableCondition(condition=%s, initial_time=%s, start_time=%s, end_time=%s)' \
+                   % (repr(self.__condition), self.initial_time, self.start_time, self.end_time)
 
         def create_interval_by_timestamp(self, timestamp):
             """
@@ -278,38 +259,41 @@ class KeepExpression:
             :param timestamp: Timestamp
             :return: ApplicableInterval or None if timestamp out of bounds of the condition start/end time
             """
-            if timestamp > self.__start_time or \
-                    (self.__end_time is not None and timestamp <= self.__end_time):
+            if timestamp > self.start_time or \
+                    (self.end_time is not None and timestamp <= self.end_time):
                 return None
 
             if self.__interval_duration is None:
-                return KeepExpression.ApplicableInterval(self.__start_time,
-                                                         self.__interval_duration,
-                                                         self.__interval_amount)
+                return KeepExpression.ApplicableInterval(self.start_time,
+                                                         self.interval_duration,
+                                                         self.interval_amount)
 
             # Calculate interval factor
-            f = math.floor((self.__start_time - timestamp) / self.__interval_duration)
+            f = math.floor((self.start_time - timestamp) / self.interval_duration)
 
-            return KeepExpression.ApplicableInterval(self.__start_time - f * self.__interval_duration,
-                                                     self.__interval_duration,
-                                                     self.__interval_amount)
+            return KeepExpression.ApplicableInterval(self.start_time - f * self.interval_duration,
+                                                     self.interval_duration,
+                                                     self.interval_amount)
 
-    def __create_applicable_conditions(self, start_time):
+    def __create_applicable_conditions(self, initial_time):
         """
         Create applicable conditions from this keep expression
-        :param start_time: Start time for conditions
+        :param initial_time: Start time for conditions
         :return: List of applicable conditions
         """
         return list(map(lambda i: KeepExpression.ApplicableCondition(
-            self.__conditions[i],
-            self.__conditions[i+1] if i < len(self.__conditions) - 1 else None,
-            start_time), range(0, len(self.__conditions))))
+            condition=self.__conditions[i],
+            initial_time=initial_time,
+            # End time is the start time of the next condition or None if it's the last
+            end_time=(initial_time - self.__conditions[i+1].age) if i < len(self.__conditions) - 1 else None),
+                        range(0, len(self.__conditions))))
 
     def __init__(self, expression):
         """
         c'tor
         :param expression: Expression string defining multiple criteria for keeping backups
         """
+        self.__logger = logging.getLogger(self.__class__.__name__)
         expression = str(expression)
 
         # Parse keep expression string
@@ -321,7 +305,7 @@ class KeepExpression:
         self.__expression_text = ', '.join(criteria)
 
         # Iterate and parse
-        conditions = list(map(lambda x: KeepExpression.Condition(x), criteria))
+        conditions = list(map(lambda x: KeepExpression.Condition.parse(x), criteria))
 
         # Conditions sorted by age
         self.__conditions = sorted(conditions, key=lambda c: c.age)
