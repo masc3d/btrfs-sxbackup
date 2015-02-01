@@ -1,14 +1,13 @@
 import logging
 import logging.handlers
 import sys
+from subprocess import CalledProcessError
 import traceback
 
 from argparse import ArgumentParser
-from urllib import parse
-import btrfs_sxbackup.command
-from btrfs_sxbackup.command import Error
+import btrfs_sxbackup.commands
+from btrfs_sxbackup.commands import Error
 from btrfs_sxbackup.configs import Configuration
-from btrfs_sxbackup.retention import KeepExpression
 from btrfs_sxbackup import mail
 from btrfs_sxbackup import __version__
 
@@ -21,6 +20,7 @@ CMD_RUN = 'run'
 parser = ArgumentParser(prog=app_name)
 parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
                     help='Do not log to STDOUT')
+parser.add_argument('--trace', dest='trace', action='store_true', default=False, help='Enables trace output')
 parser.add_argument('--version', action='version', version='%s v%s' % (app_name, __version__))
 
 subparsers = parser.add_subparsers()
@@ -31,16 +31,17 @@ subparsers.dest = 'command'
 parser_init = subparsers.add_parser(CMD_INIT, help='initialize backup job')
 parser_init.add_argument('source_subvolume', type=str,
                          help='Source subvolume to backup. Local path or SSH url.')
-parser_init.add_argument('destination_container_subvolume', type=str,
+parser_init.add_argument('destination_subvolume', type=str,
                          help='Destination subvolume receiving backup snapshots. Local path or SSH url.')
-parser_init.add_argument('-sk', '--source-keep', type=str, default='10',
-                         help='Expression defining which source snapshots to keep/cleanup. Can be a static number'
+parser_init.add_argument('-sr', '--source-retention', type=str, default=None,
+                         help='Expression defining which source snapshots to retain/cleanup. Can be a static number'
                               ' (of backups) or more complex expression like "1d:4/d, 1w:daily, 2m:none" literally'
-                              ' translating to: "1 day from now keep 4 backups a day, 1 week from now keep daily backups,'
-                              ' 2 months from now keep none". Default is 10')
-parser_init.add_argument('-dk', '--destination-keep', type=str, default='10',
-                         help='Expression defining which destination snapshots to keep/cleanup. Can be a static number'
-                              ' (of backups) or more complex expression (see --source-keep argument). Default is 10')
+                              ' translating to: "1 day from now keep4 backups a day, 1 week from now keep daily backups,'
+                              ' 2 months from now keep none". Defaults to global oonfiguration file setting or 10'
+                              ' if it doesn''t exist.')
+parser_init.add_argument('-dr', '--destination-retention', type=str, default=None,
+                         help='Expression defining which destination snapshots to retain/cleanup. Can be a static number'
+                              ' (of backups) or more complex expression (see --source-retention argument). Default is 10')
 parser_init.add_argument('-c', '--compress', action='store_true',
                          help='Enables compression during transmission. Requires lzop to be installed on both source'
                               ' and destination')
@@ -59,8 +60,7 @@ parser_run.add_argument('-li', '--log-ident', dest='log_ident', type=str, defaul
 args = parser.parse_args()
 
 # Read global configuration
-config = Configuration()
-config.read()
+Configuration.instance().read()
 
 logger = logging.getLogger()
 
@@ -97,34 +97,33 @@ try:
             log_memory_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
             logger.addHandler(log_memory_handler)
 
-        url = parse.urlsplit(args.subvolume)
-        btrfs_sxbackup.command.run(url)
+        btrfs_sxbackup.commands.run(args.subvolume)
 
     elif args.command == CMD_INIT:
-        source_url = parse.urlsplit(args.source_subvolume)
-        dest_url = parse.urlsplit(args.destination_container_subvolume)
 
-        btrfs_sxbackup.command.init(
-            source_url=source_url,
-            source_keep=KeepExpression(args.source_keep),
-            dest_url=dest_url,
-            dest_keep=KeepExpression(args.destination_keep),
+        btrfs_sxbackup.commands.init(
+            source_url=args.source_subvolume,
+            source_retention=args.source_retention,
+            dest_url=args.destination_subvolume,
+            dest_retention=args.destination_retention,
             compress=args.compress)
 
-except Error as e:
-    logger.error('%s' % e)
-    exit(1)
 except SystemExit as e:
     if e.code != 0:
         raise
+
 except BaseException as e:
     # Log exception message
     e_msg = str(e)
     if len(e_msg) > 0:
         logger.error('%s' % e)
 
-    # Log stack trace
-    logger.error(traceback.format_exc())
+    if isinstance(e, CalledProcessError):
+        logger.error('%s' % e.output.decode().strip())
+
+    if args.trace:
+        # Log stack trace
+        logger.error(traceback.format_exc())
 
     # Email notification
     if email_recipient:

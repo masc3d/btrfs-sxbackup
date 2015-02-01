@@ -23,9 +23,9 @@ def splice(items_to_splice, lambda_condition):
     return remainder, spliced
 
 
-class KeepExpression:
+class RetentionExpression:
     """
-    Represents a sequence of conditions describing which backups to keep.
+    Represents a sequence of conditions describing which backups to retain.
     Each regular condition is defined as <age>:<ratio>
 
     Age is defined as: <amount><time span literal> where time span is one of h, d, w or m (hours, days, weeks or months)
@@ -46,7 +46,7 @@ class KeepExpression:
 
     class Condition:
         """
-        Each condition of a keep expression reflects how many backups to keep after a specific amount of time
+        Each condition of a retention expression reflects how many backups to retain after a specific amount of time
         """
 
         __kd = {'h': timedelta(hours=1),
@@ -55,7 +55,7 @@ class KeepExpression:
                 'm': timedelta(days=30),
                 'n': None}
 
-        __keep_re = re.compile('^([0-9]+)(/([hdwm]))?$', re.IGNORECASE)
+        __retain_re = re.compile('^([0-9]+)(/([hdwm]))?$', re.IGNORECASE)
         __age_re = re.compile('^([0-9]+)([hdwm])?$', re.IGNORECASE)
 
         def __init__(self, age: timedelta, interval_duration: timedelta, interval_amount: int, text: str):
@@ -78,38 +78,38 @@ class KeepExpression:
                                      % text)
             else:
                 age_literal = c_parts[0].strip()
-                keep_literal = c_parts[1].strip()
+                retain_literal = c_parts[1].strip()
 
                 # Parse age (examples: 4d, 4w, 30 ..)
-                match = KeepExpression.Condition.__age_re.match(age_literal)
+                match = RetentionExpression.Condition.__age_re.match(age_literal)
                 if match is None:
                     raise ValueError('Invalid age [%s]' % age_literal)
 
                 if match.group(2) is not None:
                     # Time literal part of age
-                    age = int(match.group(1)) * KeepExpression.Condition.__kd[match.group(2)]
+                    age = int(match.group(1)) * RetentionExpression.Condition.__kd[match.group(2)]
                 else:
                     # Plain number of hours
                     age = timedelta(hours=int(match.group(1)))
 
                 # Parse keep expression (examples: 4/d, 4/w, 20 ..)
-                if keep_literal[0] in KeepExpression.Condition.__kd:
-                    interval_duration = KeepExpression.Condition.__kd[keep_literal[0]]
+                if retain_literal[0] in RetentionExpression.Condition.__kd:
+                    interval_duration = RetentionExpression.Condition.__kd[retain_literal[0]]
                     interval_amount = 1 if interval_duration is not None else 0
                 else:
-                    match = KeepExpression.Condition.__keep_re.match(keep_literal)
+                    match = RetentionExpression.Condition.__retain_re.match(retain_literal)
                     if match is None:
-                        raise ValueError('Invalid keep [%s]' % keep_literal)
+                        raise ValueError('Invalid retention [%s]' % retain_literal)
                     interval_amount = int(match.group(1))
                     if match.group(3) is None:
                         interval_duration = None
                     else:
-                        interval_duration = KeepExpression.Condition.__kd[str(match.group(3)[0])]
+                        interval_duration = RetentionExpression.Condition.__kd[str(match.group(3)[0])]
 
-            return KeepExpression.Condition(age=age,
-                                            interval_duration=interval_duration,
-                                            interval_amount=interval_amount,
-                                            text=text)
+            return RetentionExpression.Condition(age=age,
+                                                 interval_duration=interval_duration,
+                                                 interval_amount=interval_amount,
+                                                 text=text)
 
         @property
         def text(self):
@@ -128,7 +128,7 @@ class KeepExpression:
             return self.__interval_amount
 
         def __repr__(self):
-            return 'Condition(age=%s, keep_amount=%s, keep_interval=%s)' \
+            return 'Condition(age=%s, retain_amount=%s, retain_interval=%s)' \
                    % (self.age, self.interval_amount, self.interval_duration)
 
         def __str__(self):
@@ -138,6 +138,7 @@ class KeepExpression:
         """
         Applicable interval, relative to a timestamp
         """
+
         def __init__(self, start, duration, amount):
             self.__start = start
             self.__duration = duration
@@ -168,10 +169,10 @@ class KeepExpression:
             """
             Reduces a list of items evenly
             :param items: List of items to reduce
-            :param max_amount: Maximum amount of items to keep
-            :return: (to_keep, to_remove) tuple of lists
+            :param max_amount: Maximum amount of items to retain
+            :return: (to_retain, to_remove) tuple of lists
             """
-            to_keep = list()
+            to_retain = list()
             to_remove = list()
 
             if max_amount == 0:
@@ -184,37 +185,38 @@ class KeepExpression:
                 for j in range(0, len(items)):
                     item = items[j]
                     if j == next_index:
-                        to_keep.append(item)
+                        to_retain.append(item)
                         s += ss
                         next_index = round(s)
                     else:
                         to_remove.append(item)
             else:
-                to_keep.extend(items)
+                to_retain.extend(items)
 
-            return to_keep, to_remove
+            return to_retain, to_remove
 
         def filter(self, items, lambda_timestamp):
             """
             Filters item according to criteria defined by this interval
             :param items: Items to filter
             :param lambda_timestamp: Lambda to return timestamp for each item
-            :return: (items, to_keep, to_remove) The items which have not matched and one list items to keep/remove
+            :return: (items, to_retain, to_remove) The items which have not matched and one list items to retain/remove
             """
             if self.end is not None:
                 (items, interval_items) = splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
-                (to_keep, to_remove) = self.__reduce(interval_items, self.amount)
+                (to_retain, to_remove) = self.__reduce(interval_items, self.amount)
             else:
-                to_keep = items[:self.amount]
+                to_retain = items[:self.amount]
                 to_remove = items[self.amount:]
                 items = list()
 
-            return items, to_keep, to_remove
+            return items, to_retain, to_remove
 
     class ApplicableCondition(Condition):
         """
         Applicable condition, relative to a timestamp
         """
+
         def __init__(self, condition, initial_time, end_time):
             super().__init__(age=condition.age,
                              interval_duration=condition.interval_duration,
@@ -264,34 +266,34 @@ class KeepExpression:
                 return None
 
             if self.__interval_duration is None:
-                return KeepExpression.ApplicableInterval(self.start_time,
-                                                         self.interval_duration,
-                                                         self.interval_amount)
+                return RetentionExpression.ApplicableInterval(self.start_time,
+                                                              self.interval_duration,
+                                                              self.interval_amount)
 
             # Calculate interval factor
             f = math.floor((self.start_time - timestamp) / self.interval_duration)
 
-            return KeepExpression.ApplicableInterval(self.start_time - f * self.interval_duration,
-                                                     self.interval_duration,
-                                                     self.interval_amount)
+            return RetentionExpression.ApplicableInterval(self.start_time - f * self.interval_duration,
+                                                          self.interval_duration,
+                                                          self.interval_amount)
 
     def __create_applicable_conditions(self, initial_time):
         """
-        Create applicable conditions from this keep expression
+        Create applicable conditions from this retention expression
         :param initial_time: Start time for conditions
         :return: List of applicable conditions
         """
-        return list(map(lambda i: KeepExpression.ApplicableCondition(
+        return list(map(lambda i: RetentionExpression.ApplicableCondition(
             condition=self.__conditions[i],
             initial_time=initial_time,
             # End time is the start time of the next condition or None if it's the last
-            end_time=(initial_time - self.__conditions[i+1].age) if i < len(self.__conditions) - 1 else None),
+            end_time=(initial_time - self.__conditions[i + 1].age) if i < len(self.__conditions) - 1 else None),
                         range(0, len(self.__conditions))))
 
     def __init__(self, expression):
         """
         c'tor
-        :param expression: Expression string defining multiple criteria for keeping backups
+        :param expression: Expression string defining multiple criteria for retaining backups
         """
         self.__logger = logging.getLogger(self.__class__.__name__)
         expression = str(expression)
@@ -305,7 +307,7 @@ class KeepExpression:
         self.__expression_text = ', '.join(criteria)
 
         # Iterate and parse
-        conditions = list(map(lambda x: KeepExpression.Condition.parse(x), criteria))
+        conditions = list(map(lambda x: RetentionExpression.Condition.parse(x), criteria))
 
         # Conditions sorted by age
         self.__conditions = sorted(conditions, key=lambda c: c.age)
@@ -319,10 +321,10 @@ class KeepExpression:
 
     def filter(self, items: list, lambda_timestamp):
         """
-        Filter items according to keep expression
+        Filter items according to retention expression
         :param items: Items to filter
         :param lambda_timestamp: Lambda to return the timestamp for each item
-        :return: (items_to_remove_by_condition, items_to_keep)
+        :return: (items_to_remove_by_condition, items_to_retain)
         """
 
         if len(self.__conditions) == 0:
@@ -333,7 +335,7 @@ class KeepExpression:
 
         items = sorted(items, key=lambda_timestamp, reverse=True)
 
-        items_to_keep = list()
+        items_to_retain = list()
         items_to_remove_by_condition = collections.OrderedDict()
 
         now = datetime.utcnow()
@@ -341,7 +343,7 @@ class KeepExpression:
 
         # Splice recent items (newer than first condition age)
         (items, recent_items) = splice(items, lambda i: lambda_timestamp(i) > (now - self.__conditions[0].age))
-        items_to_keep.extend(recent_items)
+        items_to_retain.extend(recent_items)
 
         while len(items) > 0 and len(conditions) > 0:
             item_timestamp = lambda_timestamp(items[0])
@@ -356,8 +358,8 @@ class KeepExpression:
 
             items_to_remove = list()
 
-            (items, to_keep, to_remove) = interval.filter(items, lambda_timestamp)
-            items_to_keep.extend(to_keep)
+            (items, to_retain, to_remove) = interval.filter(items, lambda_timestamp)
+            items_to_retain.extend(to_retain)
             items_to_remove.extend(to_remove)
 
             if len(items_to_remove) > 0:
@@ -366,4 +368,4 @@ class KeepExpression:
                 else:
                     items_to_remove_by_condition[condition].extend(items_to_remove)
 
-        return items_to_remove_by_condition, items_to_keep
+        return items_to_remove_by_condition, items_to_retain
