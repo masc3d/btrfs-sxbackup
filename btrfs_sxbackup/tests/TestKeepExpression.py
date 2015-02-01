@@ -4,8 +4,8 @@ import sys
 import time
 from datetime import datetime
 from datetime import timedelta
-from btrfs_sxbackup.SnapshotName import SnapshotName
-from btrfs_sxbackup.KeepExpression import KeepExpression
+from btrfs_sxbackup.entities import SnapshotName
+from btrfs_sxbackup.retention import KeepExpression
 
 
 class TestKeepExpression(unittest.TestCase):

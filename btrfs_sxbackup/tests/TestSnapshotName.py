@@ -1,5 +1,5 @@
 import unittest
-from btrfs_sxbackup.SnapshotName import SnapshotName
+from btrfs_sxbackup.entities import SnapshotName
 
 
 class TestSnapshotName(unittest.TestCase):
