@@ -59,11 +59,11 @@ def init(source_url: str,
 
     if not src_config.uuid or not dst_config.uuid:
         raise Error('Update of existing locations requires uuids. This backup job was presumably created'
-                    ' with an older version. Use force to override this check.')
+                    ' with an older version.')
 
     if src_config.uuid != dst_config.uuid:
         raise Error('Update of existing locations requires consistent location uuids,'
-                    ' source [%s] != destination [%s]. Use force to override this check.'
+                    ' source [%s] != destination [%s].'
                     % (src_config.uuid, dst_config.uuid))
 
     # Update configuration parameters with current settings for this backup (both ways)

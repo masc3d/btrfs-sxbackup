@@ -54,7 +54,7 @@ class SnapshotName:
 
 
 class Subvolume(object):
-    __regex = re.compile('^ID ([0-9]+) gen ([0-9]+) top level ([0-9]+) path (.+)$', re.IGNORECASE)
+    __regex = re.compile('^ID ([0-9]+).*gen ([0-9]+).*top level ([0-9]+).*path (.+).*$', re.IGNORECASE)
 
     def __init__(self, subvol_id, gen, top_level, path):
         self.__id = subvol_id

@@ -6,7 +6,7 @@ from datetime import datetime
 from datetime import timedelta
 
 
-def splice(items_to_splice, lambda_condition):
+def _splice(items_to_splice, lambda_condition):
     """
     Splice items matching a condition
     :param items_to_splice: Items to splice
@@ -203,7 +203,7 @@ class RetentionExpression:
             :return: (items, to_retain, to_remove) The items which have not matched and one list items to retain/remove
             """
             if self.end is not None:
-                (items, interval_items) = splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
+                (items, interval_items) = _splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
                 (to_retain, to_remove) = self.__reduce(interval_items, self.amount)
             else:
                 to_retain = items[:self.amount]
@@ -345,7 +345,7 @@ class RetentionExpression:
         conditions = self.__create_applicable_conditions(now)
 
         # Splice recent items (newer than first condition age)
-        (items, recent_items) = splice(items, lambda i: lambda_timestamp(i) > (now - self.__conditions[0].age))
+        (items, recent_items) = _splice(items, lambda i: lambda_timestamp(i) > (now - self.__conditions[0].age))
         items_to_retain.extend(recent_items)
 
         while len(items) > 0 and len(conditions) > 0:
