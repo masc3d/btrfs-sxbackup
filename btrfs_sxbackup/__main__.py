@@ -36,12 +36,13 @@ parser_init.add_argument('destination_subvolume', type=str,
 parser_init.add_argument('-sr', '--source-retention', type=str, default=None,
                          help='Expression defining which source snapshots to retain/cleanup. Can be a static number'
                               ' (of backups) or more complex expression like "1d:4/d, 1w:daily, 2m:none" literally'
-                              ' translating to: "1 day from now keep4 backups a day, 1 week from now keep daily backups,'
-                              ' 2 months from now keep none". Defaults to global oonfiguration file setting or 10'
-                              ' if it doesn''t exist.')
+                              ' translating to: "1 day from now keep4 backups a day, 1 week from now keep daily'
+                              ' backups, 2 months from now keep none". Defaults to global'
+                              ' oonfiguration file setting or 10 if it doesn''t exist.')
 parser_init.add_argument('-dr', '--destination-retention', type=str, default=None,
-                         help='Expression defining which destination snapshots to retain/cleanup. Can be a static number'
-                              ' (of backups) or more complex expression (see --source-retention argument). Default is 10')
+                         help='Expression defining which destination snapshots to retain/cleanup. Can be a static'
+                              ' number (of backups) or more complex expression (see --source-retention argument).'
+                              ' Default is 10')
 parser_init.add_argument('-c', '--compress', action='store_true',
                          help='Enables compression during transmission. Requires lzop to be installed on both source'
                               ' and destination')
@@ -84,13 +85,13 @@ try:
     if args.command == CMD_RUN:
         # Log ident support
         if args.log_ident:
-            log_ident = args.log_ident if args.log_ident else config.log_ident
+            log_ident = args.log_ident if args.log_ident else Configuration.instance().log_ident
             if log_ident:
                 log_syslog_handler.ident = log_ident + ' '
 
         # Mail notification support
         if args.mail is not None:
-            email_recipient = args.mail if len(args.mail) > 0 else config.email_recipient
+            email_recipient = args.mail if len(args.mail) > 0 else Configuration.instance().email_recipient
 
             # Memory handler will buffer output for sending via mail later if needed
             log_memory_handler = logging.handlers.MemoryHandler(capacity=-1)

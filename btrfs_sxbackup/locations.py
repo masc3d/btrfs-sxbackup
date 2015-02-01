@@ -21,7 +21,6 @@ class Location:
         """
         c'tor
         :param url: Location URL
-        :param retention: Retention expression
         """
         if not url:
             raise ValueError('Location url is mandatory')
@@ -144,7 +143,7 @@ class Location:
         """ Clean out excess backups/snapshots. The newst one (index 0) will always be kept. """
         if self.__retention is not None and len(self.__snapshot_names) > 1:
             (to_remove_by_condition, to_retain) = self.__retention.filter(self.__snapshot_names[1:],
-                                                                   lambda sn: sn.timestamp)
+                                                                          lambda sn: sn.timestamp)
 
             for c in to_remove_by_condition.keys():
                 to_remove = to_remove_by_condition[c]
@@ -152,7 +151,8 @@ class Location:
                 self._log_info('Removing %d snapshot(s) due to retention [%s]: %s'
                                % (len(to_remove), str(c), list(map(lambda x: str(x), to_remove))))
                 cmd = " && ".join(
-                    map(lambda x: 'btrfs sub del "%s"' % (os.path.join(self.container_subvolume_path, str(x))), to_remove))
+                    map(lambda x: 'btrfs sub del "%s"' % (os.path.join(self.container_subvolume_path, str(x))),
+                        to_remove))
 
                 subprocess.check_output(
                     self.create_subprocess_args(cmd))
@@ -194,7 +194,6 @@ class SourceLocation(Location):
         """
         c'tor
         :param url: Location URL
-        :param retention: Retention expression
         """
         if not container_subvolume_relpath:
             container_subvolume_relpath = '.sxbackup'
@@ -210,7 +209,8 @@ class SourceLocation(Location):
 
         # Source specific preparation, check and create source snapshot volume if required
         subprocess.check_output(self.create_subprocess_args(
-            'if [ ! -d %s ] ; then btrfs sub create "%s"; fi' % (self.container_subvolume_path, self.container_subvolume_path)))
+            'if [ ! -d %s ] ; then btrfs sub create "%s"; fi' % (
+            self.container_subvolume_path, self.container_subvolume_path)))
 
         # Generic location preparation
         super().prepare_environment()
@@ -228,7 +228,6 @@ class DestinationLocation(Location):
         """
         c'tor
         :param url: Location URL
-        :param retention: Retention expression
         """
         super().__init__(url)
 

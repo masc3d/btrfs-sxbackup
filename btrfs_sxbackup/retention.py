@@ -283,12 +283,15 @@ class RetentionExpression:
         :param initial_time: Start time for conditions
         :return: List of applicable conditions
         """
-        return list(map(lambda i: RetentionExpression.ApplicableCondition(
-            condition=self.__conditions[i],
-            initial_time=initial_time,
-            # End time is the start time of the next condition or None if it's the last
-            end_time=(initial_time - self.__conditions[i + 1].age) if i < len(self.__conditions) - 1 else None),
-                        range(0, len(self.__conditions))))
+        return list(map(lambda i:
+                        RetentionExpression.ApplicableCondition(
+                            condition=self.__conditions[i],
+                            initial_time=initial_time,
+                            # End time is the start time of the next condition or None if it's the last
+                            end_time=(initial_time - self.__conditions[i + 1].age)
+                            if i < len(self.__conditions) - 1
+                            else None),
+                    range(0, len(self.__conditions))))
 
     def __init__(self, expression):
         """
