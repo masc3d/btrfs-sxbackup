@@ -1,6 +1,9 @@
 import sys
+
 from setuptools import setup
+
 from btrfs_sxbackup import __version__
+
 
 if sys.version_info.major < 3:
     print('btrfs-sxbackup requires python v3.x')

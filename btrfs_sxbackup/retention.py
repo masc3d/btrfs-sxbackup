@@ -165,7 +165,8 @@ class RetentionExpression:
             return 'ApplicableInterval(start=%s, duration=%s, amount=%s, end=%s)' \
                    % (self.start, self.duration, self.amount, self.end)
 
-        def __reduce(self, items, max_amount):
+        @staticmethod
+        def __reduce(items, max_amount):
             """
             Reduces a list of items evenly
             :param items: List of items to reduce

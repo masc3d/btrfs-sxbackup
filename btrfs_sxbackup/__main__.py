@@ -3,13 +3,14 @@ import logging.handlers
 import sys
 from subprocess import CalledProcessError
 import traceback
-
 from argparse import ArgumentParser
+
 import btrfs_sxbackup.commands
 from btrfs_sxbackup.commands import Error
 from btrfs_sxbackup.configs import Configuration
 from btrfs_sxbackup import mail
 from btrfs_sxbackup import __version__
+
 
 app_name = 'btrfs-sxbackup'
 
