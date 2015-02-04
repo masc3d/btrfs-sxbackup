@@ -74,7 +74,7 @@ class Location:
         return self.__snapshot_names
 
     @property
-    def location_type(self):
+    def location_type(self) -> LocationType:
         return self.__location_type
 
     @location_type.setter
@@ -82,7 +82,7 @@ class Location:
         self.__location_type = location_type
 
     @property
-    def uuid(self):
+    def uuid(self) -> UUID:
         return self.__uuid
 
     @uuid.setter
@@ -90,7 +90,7 @@ class Location:
         self.__uuid = value
 
     @property
-    def url(self):
+    def url(self) -> parse.SplitResult:
         return self.__url
 
     @url.setter
@@ -103,21 +103,14 @@ class Location:
         self.__url = value
 
     @property
-    def container_subvolume_relpath(self):
+    def container_subvolume_relpath(self) -> str:
         return self.__container_subvolume_relpath
 
     @container_subvolume_relpath.setter
-    def container_subvolume_relpath(self, value):
-        self.__container_subvolume_relpath = value.rstrip(os.path.sep) if value else None
-
-    @property
-    def container_subvolume_path(self):
-        return os.path.join(self.url.path, self.container_subvolume_relpath) \
-            if self.container_subvolume_relpath else self.url.path
-
-    @property
-    def configuration_filename(self):
-        return os.path.join(self.container_subvolume_path, self.__CONFIG_FILENAME)
+    def container_subvolume_relpath(self, value: str):
+        if value and not value.endswith(os.path.sep):
+            value += os.path.sep
+        self.__container_subvolume_relpath = value
 
     @property
     def retention(self) -> RetentionExpression:
@@ -128,49 +121,76 @@ class Location:
         self.__retention = retention
 
     @property
-    def compress(self):
+    def compress(self) -> bool:
         return self.__compress
 
     @compress.setter
-    def compress(self, compress):
+    def compress(self, compress: bool):
         self.__compress = compress
 
-    def is_remote(self):
+    @property
+    def container_subvolume_path(self) -> str:
+        return os.path.join(self.url.path, self.container_subvolume_relpath) \
+            if self.container_subvolume_relpath else self.url.path
+
+    @property
+    def configuration_filename(self) -> str:
+        return os.path.join(self.container_subvolume_path, self.__CONFIG_FILENAME)
+
+    def is_remote(self) -> bool:
         return self.url.hostname is not None
 
-    def create_subprocess_args(self, cmd):
+    def _exec_check_output(self, cmd) -> bytes:
         """
-        Create subprocess arguments for shell command/args to be executed in this location.
-        Internally Wraps command into ssh call if url host name is not None
-        :param cmd: Shell command
-        :return: Subprocess arguments
+        Wrapper for shell.exec_check_output
+        :param cmd: Command to execute
+        :return: output
         """
-        subprocess_args = shell.create_subprocess_args(cmd, self.url)
-        self._log_debug(subprocess_args)
-        return subprocess_args
+        return shell.exec_check_output(cmd, self.url)
+
+    def _exec_call(self, cmd) -> int:
+        """
+        Wrapper for shell.exec_call
+        :param cmd: Command to execute
+        :return: returncode
+        """
+        return shell.exec_call(cmd, self.url)
+
+    def _shell_create_subprocess_args(self, cmd) -> list:
+        """
+        Wrapper for shell.create_subprocess_args, autmoatically passing location url
+        :param cmd: Command to execute
+        :return: subprocess args
+        """
+        return shell.create_subprocess_args(cmd, self.url)
+
+    def has_configuration(self):
+        returncode = self._exec_call('if [ -f "%s" ] ; then exit 10; fi' % self.configuration_filename)
+        return returncode == 10
 
     def prepare_environment(self):
         """ Prepare location environment """
 
         temp_subvolume_path = os.path.join(self.container_subvolume_path, self.__TEMP_BACKUP_NAME)
 
-        if self.__location_type == LocationType.Source:
-            # Source specific preparation, check and create source snapshot volume if required
-            subprocess.check_output(self.create_subprocess_args(
-                'if [ ! -d %s ] ; then btrfs sub create "%s"; fi' % (
-                    self.container_subvolume_path, self.container_subvolume_path)))
+        # Create container subvolume if it does not exist
+        self._exec_check_output('if [ ! -d "%s" ] ; then btrfs sub create "%s"; fi' % (
+                self.container_subvolume_path, self.container_subvolume_path))
+
+        # Check if path is actually a subvolume
+        self._exec_check_output('btrfs sub show "%s"' % self.container_subvolume_path)
 
         # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
-        subprocess.check_output(self.create_subprocess_args(
-            'if [ -d "%s" ] ; then btrfs sub del "%s"; fi' % (temp_subvolume_path, temp_subvolume_path)))
+        self._exec_check_output('if [ -d "%s" ] ; then btrfs sub del "%s"; fi' % (temp_subvolume_path, temp_subvolume_path))
 
     def retrieve_snapshot_names(self):
         """ Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
         stored internally (self.snapshot_names) and also returned. """
 
         self._log_info('Retrieving snapshot names')
-        output = subprocess.check_output(
-            self.create_subprocess_args('btrfs sub list -o "%s"' % self.container_subvolume_path))
+
+        output = self._exec_check_output('btrfs sub list -o "%s"' % self.container_subvolume_path)
+
         # output is delivered as a byte sequence, decode to unicode string and split lines
         lines = output.decode().splitlines()
 
@@ -189,7 +209,14 @@ class Location:
                                 % (self.url.path, subvol_path, subvol_inconsistent_path))
 
         # sort and return
-        snapshot_names = map(lambda l: SnapshotName.parse(os.path.basename(l.path)), subvolumes)
+        snapshot_names = []
+        for sv in subvolumes:
+            try:
+                snapshot_names.append(SnapshotName.parse(os.path.basename(sv.path)))
+            except:
+                # skip snapshot names which cannot be parsed
+                pass
+
         self.__snapshot_names = sorted(snapshot_names, key=lambda sn: sn.timestamp, reverse=True)
         return self.__snapshot_names
 
@@ -197,8 +224,8 @@ class Location:
         """ Creates a new (temporary) snapshot within container subvolume """
         # Create new temporary snapshot (source)
         self._log_info('Creating snapshot')
-        subprocess.check_output(self.create_subprocess_args(
-            'btrfs sub snap -r "%s" "%s" && sync' % (self.url.path, os.path.join(self.container_subvolume_path, name))))
+        self._exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
+                   % (self.url.path, os.path.join(self.container_subvolume_path, name)))
 
     def cleanup_snapshots(self):
         """ Clean out excess backups/snapshots. The newst one (index 0) will always be kept. """
@@ -215,8 +242,7 @@ class Location:
                     map(lambda x: 'btrfs sub del "%s"' % (os.path.join(self.container_subvolume_path, str(x))),
                         to_remove))
 
-                subprocess.check_output(
-                    self.create_subprocess_args(cmd))
+                self._exec_check_output(cmd)
 
     def transfer_snapshot(self, name: str, target: 'Location'):
         # Create source snapshot
@@ -239,8 +265,9 @@ class Location:
         if self.compress:
             send_command_str += ' | lzop -1'
 
-        send_command = self.create_subprocess_args(send_command_str)
-        send_process = subprocess.Popen(send_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        send_process = subprocess.Popen(self._shell_create_subprocess_args(send_command_str),
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE)
 
         # pv command/subprocess for progress indication
         pv_process = None
@@ -252,10 +279,9 @@ class Location:
         if self.compress:
             receive_command_str = 'lzop -d | ' + receive_command_str
 
-        receive_command = target.create_subprocess_args(receive_command_str)
-        receive_process = subprocess.Popen(receive_command,
+        receive_process = subprocess.Popen(target._shell_create_subprocess_args(receive_command_str),
                                            stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
-                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         receive_returncode = None
         send_returncode = None
@@ -279,22 +305,24 @@ class Location:
 
             time.sleep(2)
 
-        # wait for commands to complete
+        # Wait for commands to complete
         send_returncode = send_process.wait()
         receive_returncode = receive_process.wait()
-
-        if send_returncode != 0:
-            raise subprocess.CalledProcessError(send_returncode, send_command, None)
-        if receive_returncode != 0:
-            raise subprocess.CalledProcessError(receive_returncode, receive_command, None)
+        if send_returncode:
+            raise subprocess.CalledProcessError(send_process.returncode,
+                                                send_process.args,
+                                                None)
+        if receive_returncode:
+            raise subprocess.CalledProcessError(receive_process.returncode,
+                                                receive_process.args,
+                                                receive_process.stdout.read())
 
         # After successful transmission, rename source and destination-side
         # snapshot subvolumes (from pending to timestamp-based name)
-        subprocess.check_output(self.create_subprocess_args(
-            'mv "%s" "%s"' % (
-                temp_source_path, os.path.join(self.container_subvolume_path, str(name)))))
-        subprocess.check_output(target.create_subprocess_args(
-            'mv "%s" "%s"' % (temp_dest_path, os.path.join(target.url.path, str(name)))))
+        self._exec_check_output('mv "%s" "%s"' % (temp_source_path,
+                                     os.path.join(self.container_subvolume_path, str(name))))
+        self._exec_check_output('mv "%s" "%s"' % (temp_dest_path,
+                                     os.path.join(target.url.path, str(name))))
 
     def write_configuration(self, corresponding_location: 'Location'):
         """ Write configuration file to container subvolume """
@@ -362,12 +390,12 @@ class Location:
         config_str = fileobject.getvalue()
 
         # Write config file to location directory
-        args = self.create_subprocess_args('cat > "%s"' % self.configuration_filename)
-        p = subprocess.Popen(args, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p = subprocess.Popen(self._shell_create_subprocess_args('cat > "%s"' % self.configuration_filename),
+                             stdin=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
         (out, err) = p.communicate(input=bytes(config_str, 'utf-8'))
-        retcode = p.wait()
-        if retcode:
-            raise subprocess.CalledProcessError(returncode=retcode, cmd=args, output=out)
+        if p.wait():
+            raise subprocess.CalledProcessError(returncode=p.returncode, cmd=p.args, output=out)
 
     def read_configuration(self) -> 'Location':
         """
@@ -375,8 +403,7 @@ class Location:
         :return: Corresponding location
         """
         # Read configuration file
-        out = subprocess.check_output(self.create_subprocess_args('cat "%s"' % self.configuration_filename),
-                                      stderr=subprocess.STDOUT)
+        out = self._exec_check_output('cat "%s"' % self.configuration_filename)
         file = out.decode().splitlines()
 
         corresponding_location = None
@@ -411,7 +438,8 @@ class Location:
         source_container = source_container if source_container else None
         destination = parse.urlsplit(destination) if destination else None
         retention = RetentionExpression(retention) if retention else None
-        compress = distutils.util.strtobool(parser.get(section, self.__KEY_COMPRESS, fallback='False'))
+        compress = True if distutils.util.strtobool(parser.get(section, self.__KEY_COMPRESS, fallback='False')) \
+            else False
 
         if location_type == LocationType.Source:
             # Amend url/container relpath from current path for source locations
@@ -444,6 +472,6 @@ class Location:
         return corresponding_location
 
     def __str__(self):
-        return self.__format_log_msg('Url [%s] snapshot container subvolume [%s] retention [%s]'
-                                     % (self.url.geturl(), self.container_subvolume_path, self.retention))
+        return self.__format_log_msg('Url [%s] snapshot container subvolume [%s] retention [%s] compress [%s]'
+                                     % (self.url.geturl(), self.container_subvolume_relpath, self.retention, self.compress))
 

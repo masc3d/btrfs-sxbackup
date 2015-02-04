@@ -20,6 +20,26 @@ def create_subprocess_args(cmd, url=None):
     return subprocess_args
 
 
+def exec_check_output(cmd, url=None) -> bytes:
+    """
+    Wrapper for subprocess.check_output
+    :param cmd: Command text
+    :param url: URL
+    :return: output
+    """
+    return subprocess.check_output(create_subprocess_args(cmd, url), stderr=subprocess.STDOUT)
+
+
+def exec_call(cmd, url=None) -> int:
+    """
+    Wrapper for subprocess.call
+    :param cmd: Command text
+    :param url: URL
+    :return:
+    """
+    return subprocess.call(create_subprocess_args(cmd, url), stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
+
 def exists(command, url=None):
     """
     Check if shell command exists
