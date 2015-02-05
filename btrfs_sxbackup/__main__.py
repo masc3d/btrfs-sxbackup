@@ -12,7 +12,6 @@ from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup import mail
 from btrfs_sxbackup import __version__
 
-
 _APP_NAME = 'btrfs-sxbackup'
 
 _CMD_INIT = 'init'
@@ -21,6 +20,41 @@ _CMD_RUN = 'run'
 _CMD_INFO = 'info'
 _CMD_SEND = 'send'
 _CMD_DESTROY = 'destroy'
+
+
+def handle_exception(ex: Exception, email_recipient: str):
+    """
+    Exception handler
+    :param ex:
+    :param mail_recipient:
+    :return:
+    """
+    # Log exception message
+    if len(str(ex)) > 0:
+        logger.error('%s' % str(ex))
+
+    if isinstance(ex, CalledProcessError):
+        if ex.output:
+            output = ex.output.decode().strip()
+            if len(output) > 0:
+                logger.error('%s' % output)
+
+    if args.trace:
+        # Log stack trace
+        logger.error(traceback.format_exc())
+
+    # Email notification
+    if email_recipient:
+        try:
+            # Format message and send
+            msg = '\n'.join(map(lambda log_record: log_memory_handler.formatter.format(log_record),
+                                log_memory_handler.buffer))
+            mail.send(email_recipient, '%s FAILED' % _APP_NAME, msg)
+        except Exception as ex:
+            logger.error(str(ex))
+
+#
+#
 
 # Parse arguments
 parser = ArgumentParser(prog=_APP_NAME)
@@ -43,43 +77,48 @@ source_retention_args = ['-sr', '--source-retention']
 source_retention_kwargs = {'type': str,
                            'default': None,
                            'help': 'expression defining which source snapshots to retain/cleanup.'
-                                   ' Can be a static number (of backups) or more complex expression like'
+                                   ' can be a static number (of backups) or more complex expression like'
                                    ' "1d:4/d, 1w:daily, 2m:none" literally translating to: "1 day from now keep'
                                    ' 4 backups a day, 1 week from now keep daily backups,'
-                                   ' 2 months from now keep none".'}
+                                   ' 2 months from now keep none"'}
 
 destination_retention_args = ['-dr', '--destination-retention']
 destination_retention_kwargs = {'type': str,
                                 'default': None,
                                 'help': 'expression defining which destination snapshots to retain/cleanup.'
-                                        ' Can be a static number (of backups) or more complex'
-                                        ' expression (see --source-retention argument).'}
+                                        ' can be a static number (of backups) or more complex'
+                                        ' expression (see --source-retention argument)'}
+
+subvolumes_args = ['subvolumes']
+subvolumes_kwargs = {'type': str,
+                     'nargs': '+',
+                     'metavar': 'subvolume',
+                     'help': 'backup job subvolume. local path or SSH url'}
 
 # Initialize command cmdline params
 p_init = subparsers.add_parser(_CMD_INIT, help='initialize backup job')
 p_init.add_argument('source_subvolume', type=str, metavar='source-subvolume',
-                    help='source subvolume to backup. Local path or SSH url.')
+                    help='source subvolume to backup. local path or SSH url')
 p_init.add_argument('destination_subvolume', type=str, metavar='destination-subvolume',
-                    help='destination subvolume receiving backup snapshots. Local path or SSH url.')
+                    help='destination subvolume receiving backup snapshots. local path or SSH url')
 p_init.add_argument(*source_retention_args, **source_retention_kwargs)
 p_init.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_init.add_argument(*compress_args, **compress_kwargs)
 
 p_destroy = subparsers.add_parser(_CMD_DESTROY, help='destroy backup job')
-p_destroy.add_argument('subvolume', type=str, help='Backup job subvolume. Local path or SSH url.')
+p_destroy.add_argument(*subvolumes_args, **subvolumes_kwargs)
 p_destroy.add_argument('--purge', action='store_true', help='removes all backup snapshots from source and destination')
 
 # Update command cmdline params
 p_update = subparsers.add_parser(_CMD_UPDATE, help='update backup job')
-p_update.add_argument('subvolume', type=str, help='Source or destination subvolume. Local path or SSH url.')
+p_update.add_argument(*subvolumes_args, **subvolumes_kwargs)
 p_update.add_argument(*source_retention_args, **source_retention_kwargs)
 p_update.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_update.add_argument(*compress_args, **compress_kwargs)
 
 # Run command cmdline params
 p_run = subparsers.add_parser(_CMD_RUN, help='run backup job')
-p_run.add_argument('subvolume', type=str,
-                   help='source or destination subvolume. Local path or SSH url.')
+p_run.add_argument(*subvolumes_args, **subvolumes_kwargs)
 p_run.add_argument('-m', '--mail', type=str, nargs='?', const='',
                    help='enables email notifications. If an email address is given, it overrides the'
                         ' default email-recipient setting in /etc/btrfs-sxbackup.conf')
@@ -88,15 +127,14 @@ p_run.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=Non
 
 # Info command cmdline params
 p_info = subparsers.add_parser(_CMD_INFO, help='backup job info')
-p_info.add_argument('subvolume', type=str,
-                    help='subvolume')
+p_info.add_argument(*subvolumes_args, **subvolumes_kwargs)
 
 # Send command cmdline params
 p_send = subparsers.add_parser(_CMD_SEND, help='send snapshot')
 p_send.add_argument('source-subvolume', type=str,
                     help='name of the snapshot to transfer')
 p_send.add_argument('destination-subvolume', type=str,
-                    help='destination subvolume receiving the snapshot. Local psth or SSH url.')
+                    help='destination subvolume receiving the snapshot. local psth or SSH url')
 p_send.add_argument(*compress_args, **compress_kwargs)
 
 
@@ -142,8 +180,12 @@ logger.info('%s v%s' % (_APP_NAME, __version__))
 
 try:
     if args.command == _CMD_RUN:
-        job = Job.load(urllib.parse.urlsplit(args.subvolume))
-        job.run()
+        for subvolume in args.subvolumes:
+            try:
+                job = Job.load(urllib.parse.urlsplit(subvolume))
+                job.run()
+            except Exception as e:
+                handle_exception(e, email_recipient)
 
     elif args.command == _CMD_INIT:
         source_retention = RetentionExpression(args.source_retention) if args.source_retention else None
@@ -157,19 +199,30 @@ try:
     elif args.command == _CMD_UPDATE:
         source_retention = RetentionExpression(args.source_retention) if args.source_retention else None
         dest_retention = RetentionExpression(args.destination_retention) if args.destination_retention else None
-
-        job = Job.load(urllib.parse.urlsplit(args.subvolume))
-        job.update(source_retention=source_retention,
-                   dest_retention=dest_retention,
-                   compress=args.compress)
+        for subvolume in args.subvolumes:
+            try:
+                job = Job.load(urllib.parse.urlsplit(subvolume))
+                job.update(source_retention=source_retention,
+                           dest_retention=dest_retention,
+                           compress=args.compress)
+            except Exception as e:
+                handle_exception(e, email_recipient)
 
     elif args.command == _CMD_DESTROY:
-        job = Job.load(urllib.parse.urlsplit(args.subvolume))
-        job.destroy(purge=args.purge)
+        for subvolume in args.subvolumes:
+            try:
+                job = Job.load(urllib.parse.urlsplit(subvolume))
+                job.destroy(purge=args.purge)
+            except Exception as e:
+                handle_exception(e, email_recipient)
 
     elif args.command == _CMD_INFO:
-        job = Job.load(urllib.parse.urlsplit(args.subvolume), raise_errors=False)
-        job.print_info()
+        for subvolume in args.subvolumes:
+            try:
+                job = Job.load(urllib.parse.urlsplit(subvolume), raise_errors=False)
+                job.print_info()
+            except Exception as e:
+                handle_exception(e, email_recipient)
 
     elif args.command == _CMD_SEND:
         pass
@@ -178,28 +231,8 @@ except SystemExit as e:
     if e.code != 0:
         raise
 
-except BaseException as e:
-    # Log exception message
-    e_msg = str(e)
-    if len(e_msg) > 0:
-        logger.error('%s' % e)
-
-    if isinstance(e, CalledProcessError):
-        if e.output:
-            output = e.output.decode().strip()
-            if len(output) > 0:
-                logger.error('%s' % output)
-
-    if args.trace:
-        # Log stack trace
-        logger.error(traceback.format_exc())
-
-    # Email notification
-    if email_recipient:
-        # Format message and send
-        msg = '\n'.join(map(lambda log_record: log_memory_handler.formatter.format(log_record),
-                            log_memory_handler.buffer))
-        mail.send(email_recipient, '%s FAILED' % _APP_NAME, msg)
+except Exception as e:
+    handle_exception(e, email_recipient)
     exit(1)
 
 exit(0)

@@ -111,7 +111,7 @@ class Location:
         :param url: Location URL
         """
         if not url:
-            raise ValueError('Location url is mandatory')
+            raise ValueError('location url is mandatory')
 
         self.__logger = logging.getLogger(self.__class__.__name__)
 
@@ -132,7 +132,7 @@ class Location:
 
     def __format_log_msg(self, msg) -> str:
         name = self.__location_type.name if self.__location_type else None
-        return '%s :: %s' % (name, msg)
+        return '%s :: %s' % (name.lower(), msg) if name else msg
 
     def _log_info(self, msg):
         self.__logger.info(self.__format_log_msg(msg))
@@ -262,7 +262,7 @@ class Location:
         """ Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
         stored internally (self.snapshot_names) and also returned. """
 
-        self._log_info('Retrieving snapshot names')
+        self._log_info('retrieving snapshot names')
 
         output = self.exec_check_output('btrfs sub list -o "%s"' % self.container_subvolume_path)
 
@@ -278,9 +278,9 @@ class Location:
                 next((s.path for s in subvolumes if os.path.dirname(s.path) != subvol_path), None)
 
             if subvol_inconsistent_path:
-                raise Exception('Inconsistent path detected at %s [%s != %s], indicating a nested'
+                raise Exception('inconsistent path detected at %s [%s != %s], indicating a nested'
                                 ' folder/subvolume structure within a container subvolume.'
-                                ' Each backup job must have a dedicated source/destination container subvolume'
+                                ' each backup job must have a dedicated source/destination container subvolume'
                                 % (self.url.path, subvol_path, subvol_inconsistent_path))
 
         # sort and return
@@ -298,7 +298,7 @@ class Location:
     def create_snapshot(self, name):
         """ Creates a new (temporary) snapshot within container subvolume """
         # Create new temporary snapshot (source)
-        self._log_info('Creating snapshot')
+        self._log_info('creating snapshot')
         self.exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
                                % (self.url.path, os.path.join(self.container_subvolume_path, name)))
 
@@ -312,11 +312,11 @@ class Location:
         self.exec_check_output(cmd)
 
     def remove_subvolume(self, subvolume_path):
-        self._log_info('Removing subvolume [%s]' % subvolume_path)
+        self._log_info('removing subvolume [%s]' % subvolume_path)
         self.exec_check_output('btrfs sub del "%s"' % subvolume_path)
 
     def remove_configuration(self):
-        self._log_info('Removing configuration')
+        self._log_info('removing configuration')
         self.exec_check_output('rm "%s"' % self.configuration_filename)
 
     def cleanup_snapshots(self):
@@ -328,8 +328,10 @@ class Location:
             for c in to_remove_by_condition.keys():
                 to_remove = to_remove_by_condition[c]
 
-                self._log_info('Removing %d snapshot(s) due to retention [%s]: %s'
-                               % (len(to_remove), str(c), list(map(lambda x: str(x), to_remove))))
+                self._log_info('removing %d snapshot%s due to retention [%s]: %s'
+                               % (len(to_remove),
+                                  's' if len(to_remove) > 1 else '',
+                                  str(c), ', '.join(list(map(lambda x: str(x), to_remove)))))
                 self.remove_snapshots(list(map(lambda x: str(x), to_remove)))
 
     def destroy(self, purge=False):
@@ -341,7 +343,7 @@ class Location:
         self.retrieve_snapshot_names()
 
         if purge:
-            self._log_info('Purging all snapshots')
+            self._log_info('purging all snapshots')
             self.remove_snapshots(list(map(lambda x: str(x), self.snapshot_names)))
 
         self.remove_configuration()
@@ -354,7 +356,7 @@ class Location:
         self.create_snapshot(self.__TEMP_SUBVOL_NAME)
 
         # Transfer temporary snapshot
-        self._log_info('Transferring snapshot')
+        self._log_info('transferring snapshot')
 
         temp_source_path = os.path.join(self.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
         temp_dest_path = os.path.join(target.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
@@ -429,29 +431,28 @@ class Location:
         self.exec_check_output('mv "%s" "%s"' % (temp_source_path, final_source_path))
         try:
             target.exec_check_output('mv "%s" "%s"' % (temp_dest_path, final_target_path))
-        except BaseException as e:
+        except Exception as e:
             # Try to avoid inconsistent state by removing successfully created source snapshot
             try:
                 self.remove_subvolume(final_source_path)
-            except BaseException as e2:
+            except Exception as e2:
                 self.__logger.error(e2)
             raise e
-
 
     def write_configuration(self, corresponding_location: 'Location'):
         """ Write configuration file to container subvolume """
         if not self.location_type:
-            raise ValueError('Missing location type')
+            raise ValueError('missing location type')
 
         if not corresponding_location.location_type:
-            raise ValueError('Missing corresponding location type')
+            raise ValueError('missing corresponding location type')
 
         if self.location_type == corresponding_location.location_type:
-            raise ValueError('Invalid corresponding lcoation type [%s] for this location [%s]'
+            raise ValueError('invalid corresponding lcoation type [%s] for this location [%s]'
                              % (corresponding_location, self.location_type.name))
 
         if self.uuid != corresponding_location.uuid:
-            raise ValueError('Corresponding location has different uuid [%s != %s]'
+            raise ValueError('corresponding location has different uuid [%s != %s]'
                              % (self.uuid, corresponding_location.uuid))
 
         location_uuid = self.uuid
@@ -533,7 +534,7 @@ class Location:
         elif section == LocationType.Destination.name:
             location_type = LocationType.Destination
         else:
-            raise ValueError('Invalid section name/location type [%s]' % section)
+            raise ValueError('invalid section name/location type [%s]' % section)
 
         # Parse config string values
         location_uuid = parser.get(section, self.__KEY_UUID, fallback=None)
@@ -586,9 +587,9 @@ class Location:
         return corresponding_location
 
     def __str__(self):
-        return self.__format_log_msg('Url [%s] snapshot container subvolume [%s] retention [%s] compress [%s]'
+        return self.__format_log_msg('url [%s]%s retention [%s] compress [%s]'
                                      % (self.url.geturl(),
-                                        self.container_subvolume_relpath,
+                                        (' container [%s]' % self.container_subvolume_relpath) if self.container_subvolume_relpath else '',
                                         self.retention,
                                         self.compress))
 
@@ -630,10 +631,10 @@ class Job:
         dest = Location(dest_url, location_type=LocationType.Destination)
 
         if source.has_configuration():
-            raise Error('Source is already initialized')
+            raise Error('source is already initialized')
 
         if dest.has_configuration():
-            raise Error('Destination is already initialized')
+            raise Error('destination is already initialized')
 
         # New uuid for both locations
         dest.uuid = source.uuid = uuid.uuid4()
@@ -661,7 +662,7 @@ class Job:
             dest.compress = False
 
         # Prepare environments
-        _logger.info('Preparing source and destination environment')
+        _logger.info('preparing source and destination environment')
         source.prepare_environment()
         dest.prepare_environment()
 
@@ -672,7 +673,7 @@ class Job:
         _logger.info(source)
         _logger.info(dest)
 
-        _logger.info('Initialized successfully')
+        _logger.info('initialized successfully')
 
         return Job(source, dest)
 
@@ -696,13 +697,13 @@ class Job:
         try:
             corresponding_location = location.read_configuration()
         except subprocess.CalledProcessError:
-            handle_error(Error('Could not read configuration [%s]' % location.configuration_filename))
+            handle_error(Error('could not read configuration [%s]' % location.configuration_filename))
 
         if corresponding_location:
             try:
                 corresponding_location.read_configuration()
             except subprocess.CalledProcessError:
-                handle_error(Error('Could not read configuration [%s]' % corresponding_location.configuration_filename))
+                handle_error(Error('could not read configuration [%s]' % corresponding_location.configuration_filename))
 
         if location.location_type == LocationType.Source:
             source = location
@@ -711,12 +712,11 @@ class Job:
             dest = location
             source = corresponding_location
 
-        if raise_errors:
-            if not dest:
-                raise Error('Location nas no destination information')
+        if not dest:
+            handle_error(Error('location nas no destination information'))
 
-            if not source:
-                raise Error('Location has no source information')
+        if not source:
+            handle_error(Error('location has no source information'))
 
         return Job(source, dest)
 
@@ -729,18 +729,18 @@ class Job:
         :param compress: Compress
         """
         if not self.source.uuid or not self.destination.uuid:
-            raise Error('Update of existing locations requires uuids. This backup job was presumably created'
+            raise Error('update of existing locations requires uuids. this backup job was presumably created'
                         ' with an older version.')
 
         if self.source.uuid != self.destination.uuid:
-            raise Error('Update of existing locations requires consistent location uuids,'
+            raise Error('update of existing locations requires consistent location uuids,'
                         ' source [%s] != destination [%s].'
                         % (self.source.uuid, self.destination.uuid))
 
         _logger.info(self.source)
         _logger.info(self.destination)
 
-        _logger.info('Updating configurations')
+        _logger.info('updating configurations')
 
         if source_retention:
             self.source.retention = source_retention
@@ -757,7 +757,7 @@ class Job:
         self.source.write_configuration(self.destination)
         self.destination.write_configuration(self.source)
 
-        _logger.info('Updated successfully')
+        _logger.info('updated successfully')
 
     def run(self):
         """ Performs backup run """
@@ -767,7 +767,7 @@ class Job:
         _logger.info(self.destination)
 
         # Prepare environments
-        _logger.info('Preparing environment')
+        _logger.info('preparing environment')
         self.source.prepare_environment()
         self.destination.prepare_environment()
 
@@ -778,7 +778,7 @@ class Job:
         new_snapshot_name = SnapshotName()
         if len(self.source.snapshot_names) > 0 \
                 and new_snapshot_name.timestamp <= self.source.snapshot_names[0].timestamp:
-            raise Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] \
+            raise Error('current snapshot name [%s] would be older than newest existing snapshot [%s] \
                                  which may indicate a system time problem'
                         % (new_snapshot_name, self.source.snapshot_names[0]))
 
@@ -792,7 +792,7 @@ class Job:
         self.source.cleanup_snapshots()
         self.destination.cleanup_snapshots()
 
-        _logger.info('Backup %s created successfully in %s'
+        _logger.info('backup %s created successfully in %s'
                      % (new_snapshot_name,
                         time.strftime("%H:%M:%S", time.gmtime(time.monotonic() - starting_time))))
 
@@ -811,13 +811,13 @@ class Job:
         if self.source and source.location_type:
             try:
                 self.source.retrieve_snapshot_names()
-            except BaseException as e:
+            except Exception as e:
                 _logger.error(str(e))
 
         if self.destination and dest.location_type:
             try:
                 self.destination.retrieve_snapshot_names()
-            except BaseException as e:
+            except Exception as e:
                 _logger.error(str(e))
 
         if (source and source.location_type) or (dest and dest.location_type):
