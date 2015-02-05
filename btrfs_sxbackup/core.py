@@ -334,8 +334,9 @@ class Location:
 
     def destroy(self, purge=False):
         """
-        Destroy this backup location. Removed configuration file and optionally all snapshots
-        :param purge: Purgs all snapshots
+        Destroy this backup location.
+        Removes configuration file and (optionally) all snapshots
+        :param purge: Purgs all snapshots in addition
         """
         self.retrieve_snapshot_names()
 
@@ -423,10 +424,19 @@ class Location:
 
         # After successful transmission, rename source and destination-side
         # snapshot subvolumes (from pending to timestamp-based name)
-        self.exec_check_output('mv "%s" "%s"' % (temp_source_path,
-                                                 os.path.join(self.container_subvolume_path, str(name))))
-        target.exec_check_output('mv "%s" "%s"' % (temp_dest_path,
-                                                   os.path.join(target.url.path, str(name))))
+        final_source_path = os.path.join(self.container_subvolume_path, str(name))
+        final_target_path = os.path.join(target.url.path, str(name))
+        self.exec_check_output('mv "%s" "%s"' % (temp_source_path, final_source_path))
+        try:
+            target.exec_check_output('mv "%s" "%s"' % (temp_dest_path, final_target_path))
+        except BaseException as e:
+            # Try to avoid inconsistent state by removing successfully created source snapshot
+            try:
+                self.remove_subvolume(final_source_path)
+            except BaseException as e2:
+                self.__logger.error(e2)
+            raise e
+
 
     def write_configuration(self, corresponding_location: 'Location'):
         """ Write configuration file to container subvolume """
