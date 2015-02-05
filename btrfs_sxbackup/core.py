@@ -1,25 +1,99 @@
+import collections
 import logging
+import subprocess
+import time
+import uuid
 import io
 import os
-import subprocess
-import uuid
 import distutils.util
-import time
-from urllib import parse
+from enum import Enum
 from configparser import ConfigParser
 from uuid import UUID
+from urllib import parse
 
-from btrfs_sxbackup import shell
-from btrfs_sxbackup.entities import LocationType
-from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup.entities import SnapshotName
+from btrfs_sxbackup.retention import RetentionExpression
+from btrfs_sxbackup import shell
 from btrfs_sxbackup.entities import Subvolume
+
+
+_logger = logging.getLogger(__name__)
+_DEFAULT_RETENTION = '10'
+
+
+class Error(Exception):
+    pass
+
+
+class LocationType(Enum):
+    Source = 0,
+    Destination = 1
+
+
+class Configuration:
+    """ btrfs-sxbackup global configuration file """
+
+    __instance = None
+
+    __CONFIG_FILENAME = '/etc/btrfs-sxbackup.conf'
+
+    __SECTION_NAME = 'Default'
+    __KEY_SOURCE_RETENTION = 'source-retention'
+    __KEY_DEST_RETENTION = 'destination-retention'
+    __KEY_LOG_IDENT = 'log-ident'
+    __key_EMAIL_RECIPIENT = 'email-recipient'
+
+    def __init__(self):
+        self.__source_retention = None
+        self.__destination_retention = None
+        self.__log_ident = None
+        self.__email_recipient = None
+
+    @staticmethod
+    def instance():
+        """
+        :return: Singleton instance
+        :rtype: Configuration
+        """
+        if not Configuration.__instance:
+            Configuration.__instance = Configuration()
+        return Configuration.__instance
+
+    @property
+    def source_retention(self):
+        return self.__source_retention
+
+    @property
+    def destination_retention(self):
+        return self.__destination_retention
+
+    @property
+    def log_ident(self):
+        return self.__log_ident
+
+    @property
+    def email_recipient(self):
+        return self.__email_recipient
+
+    def read(self):
+        cparser = ConfigParser()
+
+        if os.path.exists(self.__CONFIG_FILENAME):
+            with open(self.__CONFIG_FILENAME, 'r') as file:
+                cparser.read_file(file)
+
+            source_retention_str = cparser.get(self.__SECTION_NAME, self.__KEY_SOURCE_RETENTION, fallback=None)
+            dest_retention_str = cparser.get(self.__SECTION_NAME, self.__KEY_DEST_RETENTION, fallback=None)
+            self.__source_retention = RetentionExpression(source_retention_str) if source_retention_str else None
+            self.__destination_retention = RetentionExpression(dest_retention_str) if dest_retention_str else None
+            self.__log_ident = cparser.get(self.__SECTION_NAME, self.__KEY_LOG_IDENT, fallback=None)
+            self.__email_recipient = cparser.get(self.__SECTION_NAME, self.__key_EMAIL_RECIPIENT, fallback=None)
 
 
 class Location:
     """ Backup location """
 
-    __TEMP_BACKUP_NAME = 'temp'
+    __TEMP_SUBVOL_NAME = 'temp'
     __CONFIG_FILENAME = '.btrfs-sxbackup'
 
     # Configuration file keys
@@ -42,11 +116,11 @@ class Location:
         self.__logger = logging.getLogger(self.__class__.__name__)
 
         self.__location_type = location_type
+        self.__uuid = None
         self.__url = None
         self.__container_subvolume_relpath = None
-        self.__uuid = uuid.uuid4()
-        self.__retention = None
         self.__compress = False
+        self.__retention = None
         self.__snapshot_names = []
 
         self.url = url
@@ -140,7 +214,7 @@ class Location:
     def is_remote(self) -> bool:
         return self.url.hostname is not None
 
-    def _exec_check_output(self, cmd) -> bytes:
+    def exec_check_output(self, cmd) -> bytes:
         """
         Wrapper for shell.exec_check_output
         :param cmd: Command to execute
@@ -148,7 +222,7 @@ class Location:
         """
         return shell.exec_check_output(cmd, self.url)
 
-    def _exec_call(self, cmd) -> int:
+    def exec_call(self, cmd) -> int:
         """
         Wrapper for shell.exec_call
         :param cmd: Command to execute
@@ -156,7 +230,7 @@ class Location:
         """
         return shell.exec_call(cmd, self.url)
 
-    def _shell_create_subprocess_args(self, cmd) -> list:
+    def create_subprocess_args(self, cmd) -> list:
         """
         Wrapper for shell.create_subprocess_args, autmoatically passing location url
         :param cmd: Command to execute
@@ -165,23 +239,24 @@ class Location:
         return shell.create_subprocess_args(cmd, self.url)
 
     def has_configuration(self):
-        returncode = self._exec_call('if [ -f "%s" ] ; then exit 10; fi' % self.configuration_filename)
+        returncode = self.exec_call('if [ -f "%s" ] ; then exit 10; fi' % self.configuration_filename)
         return returncode == 10
 
     def prepare_environment(self):
         """ Prepare location environment """
 
-        temp_subvolume_path = os.path.join(self.container_subvolume_path, self.__TEMP_BACKUP_NAME)
+        temp_subvolume_path = os.path.join(self.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
 
         # Create container subvolume if it does not exist
-        self._exec_check_output('if [ ! -d "%s" ] ; then btrfs sub create "%s"; fi' % (
-                self.container_subvolume_path, self.container_subvolume_path))
+        self.exec_check_output('if [ ! -d "%s" ] ; then btrfs sub create "%s"; fi' % (
+            self.container_subvolume_path, self.container_subvolume_path))
 
         # Check if path is actually a subvolume
-        self._exec_check_output('btrfs sub show "%s"' % self.container_subvolume_path)
+        self.exec_check_output('btrfs sub show "%s"' % self.container_subvolume_path)
 
         # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
-        self._exec_check_output('if [ -d "%s" ] ; then btrfs sub del "%s"; fi' % (temp_subvolume_path, temp_subvolume_path))
+        self.exec_check_output(
+            'if [ -d "%s" ] ; then btrfs sub del "%s"; fi' % (temp_subvolume_path, temp_subvolume_path))
 
     def retrieve_snapshot_names(self):
         """ Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
@@ -189,7 +264,7 @@ class Location:
 
         self._log_info('Retrieving snapshot names')
 
-        output = self._exec_check_output('btrfs sub list -o "%s"' % self.container_subvolume_path)
+        output = self.exec_check_output('btrfs sub list -o "%s"' % self.container_subvolume_path)
 
         # output is delivered as a byte sequence, decode to unicode string and split lines
         lines = output.decode().splitlines()
@@ -224,8 +299,25 @@ class Location:
         """ Creates a new (temporary) snapshot within container subvolume """
         # Create new temporary snapshot (source)
         self._log_info('Creating snapshot')
-        self._exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
-                   % (self.url.path, os.path.join(self.container_subvolume_path, name)))
+        self.exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
+                               % (self.url.path, os.path.join(self.container_subvolume_path, name)))
+
+    def remove_snapshots(self, snapshots: list):
+        if not snapshots or len(snapshots) == 0:
+            return
+
+        cmd = 'cd "%s" && btrfs sub del %s' % (self.container_subvolume_path,
+                                               ' '.join(map(lambda x: '"%s"' % x, snapshots)))
+
+        self.exec_check_output(cmd)
+
+    def remove_subvolume(self, subvolume_path):
+        self._log_info('Removing subvolume [%s]' % subvolume_path)
+        self.exec_check_output('btrfs sub del "%s"' % subvolume_path)
+
+    def remove_configuration(self):
+        self._log_info('Removing configuration')
+        self.exec_check_output('rm "%s"' % self.configuration_filename)
 
     def cleanup_snapshots(self):
         """ Clean out excess backups/snapshots. The newst one (index 0) will always be kept. """
@@ -238,21 +330,33 @@ class Location:
 
                 self._log_info('Removing %d snapshot(s) due to retention [%s]: %s'
                                % (len(to_remove), str(c), list(map(lambda x: str(x), to_remove))))
-                cmd = " && ".join(
-                    map(lambda x: 'btrfs sub del "%s"' % (os.path.join(self.container_subvolume_path, str(x))),
-                        to_remove))
+                self.remove_snapshots(list(map(lambda x: str(x), to_remove)))
 
-                self._exec_check_output(cmd)
+    def destroy(self, purge=False):
+        """
+        Destroy this backup location. Removed configuration file and optionally all snapshots
+        :param purge: Purgs all snapshots
+        """
+        self.retrieve_snapshot_names()
+
+        if purge:
+            self._log_info('Purging all snapshots')
+            self.remove_snapshots(list(map(lambda x: str(x), self.snapshot_names)))
+
+        self.remove_configuration()
+
+        if self.location_type == LocationType.Source and self.container_subvolume_relpath:
+            self.remove_subvolume(self.container_subvolume_path)
 
     def transfer_snapshot(self, name: str, target: 'Location'):
         # Create source snapshot
-        self.create_snapshot(self.__TEMP_BACKUP_NAME)
+        self.create_snapshot(self.__TEMP_SUBVOL_NAME)
 
         # Transfer temporary snapshot
         self._log_info('Transferring snapshot')
 
-        temp_source_path = os.path.join(self.container_subvolume_path, self.__TEMP_BACKUP_NAME)
-        temp_dest_path = os.path.join(target.container_subvolume_path, self.__TEMP_BACKUP_NAME)
+        temp_source_path = os.path.join(self.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
+        temp_dest_path = os.path.join(target.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
 
         # btrfs send command/subprocess
         if len(self.snapshot_names) == 0:
@@ -265,7 +369,7 @@ class Location:
         if self.compress:
             send_command_str += ' | lzop -1'
 
-        send_process = subprocess.Popen(self._shell_create_subprocess_args(send_command_str),
+        send_process = subprocess.Popen(self.create_subprocess_args(send_command_str),
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE)
 
@@ -279,7 +383,7 @@ class Location:
         if self.compress:
             receive_command_str = 'lzop -d | ' + receive_command_str
 
-        receive_process = subprocess.Popen(target._shell_create_subprocess_args(receive_command_str),
+        receive_process = subprocess.Popen(target.create_subprocess_args(receive_command_str),
                                            stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -319,10 +423,10 @@ class Location:
 
         # After successful transmission, rename source and destination-side
         # snapshot subvolumes (from pending to timestamp-based name)
-        self._exec_check_output('mv "%s" "%s"' % (temp_source_path,
-                                     os.path.join(self.container_subvolume_path, str(name))))
-        self._exec_check_output('mv "%s" "%s"' % (temp_dest_path,
-                                     os.path.join(target.url.path, str(name))))
+        self.exec_check_output('mv "%s" "%s"' % (temp_source_path,
+                                                 os.path.join(self.container_subvolume_path, str(name))))
+        target.exec_check_output('mv "%s" "%s"' % (temp_dest_path,
+                                                   os.path.join(target.url.path, str(name))))
 
     def write_configuration(self, corresponding_location: 'Location'):
         """ Write configuration file to container subvolume """
@@ -390,7 +494,7 @@ class Location:
         config_str = fileobject.getvalue()
 
         # Write config file to location directory
-        p = subprocess.Popen(self._shell_create_subprocess_args('cat > "%s"' % self.configuration_filename),
+        p = subprocess.Popen(self.create_subprocess_args('cat > "%s"' % self.configuration_filename),
                              stdin=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
         (out, err) = p.communicate(input=bytes(config_str, 'utf-8'))
@@ -403,7 +507,7 @@ class Location:
         :return: Corresponding location
         """
         # Read configuration file
-        out = self._exec_check_output('cat "%s"' % self.configuration_filename)
+        out = self.exec_check_output('cat "%s"' % self.configuration_filename)
         file = out.decode().splitlines()
 
         corresponding_location = None
@@ -473,5 +577,264 @@ class Location:
 
     def __str__(self):
         return self.__format_log_msg('Url [%s] snapshot container subvolume [%s] retention [%s] compress [%s]'
-                                     % (self.url.geturl(), self.container_subvolume_relpath, self.retention, self.compress))
+                                     % (self.url.geturl(),
+                                        self.container_subvolume_relpath,
+                                        self.retention,
+                                        self.compress))
+
+
+class Job:
+    """
+    Backup job, comprises a source and destination location and related tasks
+    """
+
+    def __init__(self, source: Location, dest: Location):
+        self.__source = source
+        self.__dest = dest
+
+    @property
+    def source(self):
+        return self.__source
+
+    @property
+    def destination(self):
+        return self.__dest
+
+    @staticmethod
+    def init(source_url: parse.SplitResult,
+             dest_url: parse.SplitResult,
+             source_retention: RetentionExpression=None,
+             dest_retention: RetentionExpression=None,
+             compress: bool=None) -> 'Job':
+        """
+        Initializes a new backup job
+        :param source_url: Source url string
+        :param dest_url: Destination url string
+        :param source_retention: Source retention expression string
+        :param dest_retention: Destination retention expression string
+        :param compress: Compress flag
+        :return: Backup job
+        :rtype: Job
+        """
+        source = Location(source_url, location_type=LocationType.Source)
+        dest = Location(dest_url, location_type=LocationType.Destination)
+
+        if source.has_configuration():
+            raise Error('Source is already initialized')
+
+        if dest.has_configuration():
+            raise Error('Destination is already initialized')
+
+        # New uuid for both locations
+        dest.uuid = source.uuid = uuid.uuid4()
+
+        # Set parameters
+        if source_retention:
+            source.retention = source_retention
+        if not source.retention:
+            source.retention = Configuration.instance().source_retention
+        if not source.retention:
+            source.retention = RetentionExpression(_DEFAULT_RETENTION)
+
+        if dest_retention:
+            dest.retention = dest_retention
+        if not dest.retention:
+            dest.retention = Configuration.instance().destination_retention
+        if not dest.retention:
+            dest.retention = RetentionExpression(_DEFAULT_RETENTION)
+
+        if compress:
+            source.compress = dest.compress = compress
+        if not source.compress:
+            source.compress = False
+        if not dest.compress:
+            dest.compress = False
+
+        # Prepare environments
+        _logger.info('Preparing source and destination environment')
+        source.prepare_environment()
+        dest.prepare_environment()
+
+        # Writing configurations
+        source.write_configuration(dest)
+        dest.write_configuration(source)
+
+        _logger.info(source)
+        _logger.info(dest)
+
+        _logger.info('Initialized successfully')
+
+        return Job(source, dest)
+
+    @staticmethod
+    def load(url: parse.SplitResult, raise_errors: bool=True) -> 'Job':
+        """
+        Loads a backup job from an existing backup location (source or destination)
+        :param url: Location URL
+        :return: Backup job
+        """
+
+        def handle_error(e):
+            if raise_errors:
+                raise e
+            else:
+                _logger.error(str(e))
+
+        location = Location(url)
+
+        corresponding_location = None
+        try:
+            corresponding_location = location.read_configuration()
+        except subprocess.CalledProcessError:
+            handle_error(Error('Could not read configuration [%s]' % location.configuration_filename))
+
+        if corresponding_location:
+            try:
+                corresponding_location.read_configuration()
+            except subprocess.CalledProcessError:
+                handle_error(Error('Could not read configuration [%s]' % corresponding_location.configuration_filename))
+
+        if location.location_type == LocationType.Source:
+            source = location
+            dest = corresponding_location
+        else:
+            dest = location
+            source = corresponding_location
+
+        if raise_errors:
+            if not dest:
+                raise Error('Location nas no destination information')
+
+            if not source:
+                raise Error('Location has no source information')
+
+        return Job(source, dest)
+
+    def update(self, source_retention: RetentionExpression=None, dest_retention: RetentionExpression=None,
+               compress: bool=None):
+        """
+        Update backup job parameters
+        :param source_retention: Source retention
+        :param dest_retention: Destination retention
+        :param compress: Compress
+        """
+        if not self.source.uuid or not self.destination.uuid:
+            raise Error('Update of existing locations requires uuids. This backup job was presumably created'
+                        ' with an older version.')
+
+        if self.source.uuid != self.destination.uuid:
+            raise Error('Update of existing locations requires consistent location uuids,'
+                        ' source [%s] != destination [%s].'
+                        % (self.source.uuid, self.destination.uuid))
+
+        _logger.info(self.source)
+        _logger.info(self.destination)
+
+        _logger.info('Updating configurations')
+
+        if source_retention:
+            self.source.retention = source_retention
+
+        if dest_retention:
+            self.destination.retention = dest_retention
+
+        if compress:
+            self.source.compress = self.destination.compress = compress
+
+        _logger.info(self.source)
+        _logger.info(self.destination)
+
+        self.source.write_configuration(self.destination)
+        self.destination.write_configuration(self.source)
+
+        _logger.info('Updated successfully')
+
+    def run(self):
+        """ Performs backup run """
+        starting_time = time.monotonic()
+
+        _logger.info(self.source)
+        _logger.info(self.destination)
+
+        # Prepare environments
+        _logger.info('Preparing environment')
+        self.source.prepare_environment()
+        self.destination.prepare_environment()
+
+        # Retrieve snapshot names of both source and destination
+        self.source.retrieve_snapshot_names()
+        self.destination.retrieve_snapshot_names()
+
+        new_snapshot_name = SnapshotName()
+        if len(self.source.snapshot_names) > 0 \
+                and new_snapshot_name.timestamp <= self.source.snapshot_names[0].timestamp:
+            raise Error('Current snapshot name [%s] would be older than newest existing snapshot [%s] \
+                                 which may indicate a system time problem'
+                        % (new_snapshot_name, self.source.snapshot_names[0]))
+
+        self.source.transfer_snapshot(str(new_snapshot_name), self.destination)
+
+        # Update snapshot name lists
+        self.source.snapshot_names.insert(0, new_snapshot_name)
+        self.destination.snapshot_names.insert(0, new_snapshot_name)
+
+        # Clean out excess backups/snapshots
+        self.source.cleanup_snapshots()
+        self.destination.cleanup_snapshots()
+
+        _logger.info('Backup %s created successfully in %s'
+                     % (new_snapshot_name,
+                        time.strftime("%H:%M:%S", time.gmtime(time.monotonic() - starting_time))))
+
+    def destroy(self, purge=False):
+        """
+        Destroys both source and destination
+        :param purge: Purge all snapshots
+        """
+        self.source.destroy(purge=purge)
+        self.destination.destroy(purge=purge)
+
+    def print_info(self):
+        source = self.source
+        dest = self.destination
+
+        if self.source and source.location_type:
+            try:
+                self.source.retrieve_snapshot_names()
+            except BaseException as e:
+                _logger.error(str(e))
+
+        if self.destination and dest.location_type:
+            try:
+                self.destination.retrieve_snapshot_names()
+            except BaseException as e:
+                _logger.error(str(e))
+
+        if (source and source.location_type) or (dest and dest.location_type):
+            t_inset = 3
+            t_na = 'n/a'
+            i = collections.OrderedDict()
+            i['UUID'] = source.uuid if source else dest.uuid if dest else t_na
+            i['Compress'] = str(source.compress) if source else dest.compress if dest else t_na
+            i['Source URL'] = source.url.geturl().rstrip(os.path.sep) if source else t_na
+            i['Source container'] = source.container_subvolume_relpath.rstrip(os.path.sep) if source else t_na
+            i['Source retention'] = str(source.retention) if source else t_na
+            i['Source snapshots'] = source.snapshot_names if source else t_na
+            i['Destination URL'] = dest.url.geturl().rstrip(os.path.sep) if dest else t_na
+            i['Destination retention'] = str(dest.retention) if dest else t_na
+            i['Destination snapshots'] = dest.snapshot_names if dest else t_na
+
+            width = len(max(i.keys(), key=lambda x: len(x))) + 1
+
+            for label in i.keys():
+                value = i[label]
+                if value:
+                    if isinstance(value, list):
+                        for j in range(0, len(value)):
+                            s = value[j]
+                            label = label.ljust(width) if j == 0 else ''.ljust(width)
+                            label = label.rjust(width + t_inset)
+                            print('%s %s' % (label, s))
+                    else:
+                        print('%s %s' % (label.ljust(width).rjust(width + t_inset), i[label]))
 

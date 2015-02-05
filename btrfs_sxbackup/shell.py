@@ -1,4 +1,8 @@
 import subprocess
+import logging
+
+
+_logger = logging.getLogger(__name__)
 
 
 def create_subprocess_args(cmd, url=None):
@@ -16,6 +20,8 @@ def create_subprocess_args(cmd, url=None):
     subprocess_args = ['bash', '-c'] + cmd if url is None or url.hostname is None else \
         ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s'
          % (url.username, url.hostname)] + cmd
+
+    _logger.debug(subprocess_args)
 
     return subprocess_args
 

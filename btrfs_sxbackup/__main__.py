@@ -1,13 +1,14 @@
 import logging
 import logging.handlers
 import sys
-from subprocess import CalledProcessError
 import traceback
+import urllib.parse
 from argparse import ArgumentParser
+from subprocess import CalledProcessError
 
-import btrfs_sxbackup.commands
-from btrfs_sxbackup.commands import Error
-from btrfs_sxbackup.configs import Configuration
+from btrfs_sxbackup.core import Job
+from btrfs_sxbackup.core import Configuration
+from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup import mail
 from btrfs_sxbackup import __version__
 
@@ -141,30 +142,37 @@ logger.info('%s v%s' % (_APP_NAME, __version__))
 
 try:
     if args.command == _CMD_RUN:
-        btrfs_sxbackup.commands.run(args.subvolume)
+        job = Job.load(urllib.parse.urlsplit(args.subvolume))
+        job.run()
 
     elif args.command == _CMD_INIT:
-        btrfs_sxbackup.commands.init(
-            source_url=args.source_subvolume,
-            source_retention=args.source_retention,
-            dest_url=args.destination_subvolume,
-            dest_retention=args.destination_retention,
-            compress=args.compress)
+        source_retention = RetentionExpression(args.source_retention) if args.source_retention else None
+        destination_retention = RetentionExpression(args.destination_retention) if args.destination_retention else None
+        job = Job.init(source_url=urllib.parse.urlsplit(args.source_subvolume),
+                       source_retention=source_retention,
+                       dest_url=urllib.parse.urlsplit(args.destination_subvolume),
+                       dest_retention=destination_retention,
+                       compress=args.compress)
 
     elif args.command == _CMD_UPDATE:
-        btrfs_sxbackup.commands.update(args.subvolume,
-                                       source_retention=args.source_retention,
-                                       dest_retention=args.destination_retention,
-                                       compress=args.compress)
+        source_retention = RetentionExpression(args.source_retention) if args.source_retention else None
+        dest_retention = RetentionExpression(args.destination_retention) if args.destination_retention else None
+
+        job = Job.load(urllib.parse.urlsplit(args.subvolume))
+        job.update(source_retention=source_retention,
+                   dest_retention=dest_retention,
+                   compress=args.compress)
 
     elif args.command == _CMD_DESTROY:
-        btrfs_sxbackup.commands.destroy(args.subvolume, args.purge)
+        job = Job.load(urllib.parse.urlsplit(args.subvolume))
+        job.destroy(purge=args.purge)
 
     elif args.command == _CMD_INFO:
-        btrfs_sxbackup.commands.info(args.subvolume)
+        job = Job.load(urllib.parse.urlsplit(args.subvolume), raise_errors=False)
+        job.print_info()
 
     elif args.command == _CMD_SEND:
-        btrfs_sxbackup.commands.send(args.source_subvolume, args.destination_subvolume)
+        pass
 
 except SystemExit as e:
     if e.code != 0:

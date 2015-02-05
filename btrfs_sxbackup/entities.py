@@ -1,12 +1,6 @@
 import re
 
-from enum import Enum
 from datetime import datetime
-
-
-class LocationType(Enum):
-    Source = 0,
-    Destination = 1
 
 
 class SnapshotName:
