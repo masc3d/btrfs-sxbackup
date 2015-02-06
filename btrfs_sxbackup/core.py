@@ -180,7 +180,8 @@ class JobLocation(Location):
     __KEY_RETENTION = 'retention'
     __KEY_COMPRESS = 'compress'
 
-    def __init__(self, url: parse.SplitResult, location_type: JobLocationType=None, container_subvolume_relpath: str=None):
+    def __init__(self, url: parse.SplitResult, location_type: JobLocationType=None,
+                 container_subvolume_relpath: str=None):
         """
         c'tor
         :param url: Location URL
@@ -364,10 +365,13 @@ class JobLocation(Location):
         if purge:
             self._log_info('purging all snapshots')
             self.remove_snapshots(list(map(lambda x: str(x), self.snapshot_names)))
+            self.snapshot_names.clear()
 
         self.remove_configuration()
 
-        if self.location_type == JobLocationType.Source and self.container_subvolume_relpath:
+        if (len(self.snapshot_names) == 0 and
+                self.location_type == JobLocationType.Source and
+                self.container_subvolume_relpath):
             self.remove_subvolume(self.container_subvolume_path)
 
     def transfer_snapshot(self, name: str, target: 'Location'):
