@@ -6,7 +6,6 @@ import uuid
 import io
 import os
 import distutils.util
-from enum import Enum
 from configparser import ConfigParser
 from uuid import UUID
 from urllib import parse
@@ -159,11 +158,6 @@ class Location:
         return self._format_log_msg('url [%s]' % (self.url.geturl()))
 
 
-class JobLocationType(Enum):
-    Source = 0,
-    Destination = 1
-
-
 class JobLocation(Location):
     """
     Backup job location
@@ -180,7 +174,10 @@ class JobLocation(Location):
     __KEY_RETENTION = 'retention'
     __KEY_COMPRESS = 'compress'
 
-    def __init__(self, url: parse.SplitResult, location_type: JobLocationType=None,
+    TYPE_SOURCE = 'Source'
+    TYPE_DESTINATION = 'Destination'
+
+    def __init__(self, url: parse.SplitResult, location_type=None,
                  container_subvolume_relpath: str=None):
         """
         c'tor
@@ -188,20 +185,22 @@ class JobLocation(Location):
         """
         super().__init__(url)
 
-        self.__location_type = location_type
+        self.__location_type = None
         self.__uuid = None
         self.__container_subvolume_relpath = None
         self.__compress = False
         self.__retention = None
         self.__snapshot_names = []
 
-        if location_type == JobLocationType.Source and container_subvolume_relpath is None:
+        self.location_type = location_type
+
+        if self.location_type == JobLocation.TYPE_SOURCE and container_subvolume_relpath is None:
             self.container_subvolume_relpath = _DEFAULT_CONTAINER_RELPATH
         else:
             self.container_subvolume_relpath = container_subvolume_relpath
 
     def _format_log_msg(self, msg) -> str:
-        name = self.__location_type.name if self.__location_type else None
+        name = self.__location_type
         return '%s :: %s' % (name.lower(), msg) if name else msg
 
     @property
@@ -212,11 +211,15 @@ class JobLocation(Location):
         return self.__snapshot_names
 
     @property
-    def location_type(self) -> JobLocationType:
+    def location_type(self):
         return self.__location_type
 
     @location_type.setter
     def location_type(self, location_type):
+        if location_type and location_type != JobLocation.TYPE_SOURCE and location_type != JobLocation.TYPE_DESTINATION:
+            raise ValueError('Location type must be one of [%s]'
+                             % ', '.join([JobLocation.TYPE_SOURCE, JobLocation.TYPE_DESTINATION, None]))
+
         self.__location_type = location_type
 
     @property
@@ -370,7 +373,7 @@ class JobLocation(Location):
         self.remove_configuration()
 
         if (len(self.snapshot_names) == 0 and
-                self.location_type == JobLocationType.Source and
+                self.location_type == JobLocation.TYPE_SOURCE and
                 self.container_subvolume_relpath):
             self.remove_subvolume(self.container_subvolume_path)
 
@@ -472,7 +475,7 @@ class JobLocation(Location):
 
         if self.location_type == corresponding_location.location_type:
             raise ValueError('invalid corresponding lcoation type [%s] for this location [%s]'
-                             % (corresponding_location, self.location_type.name))
+                             % (corresponding_location, self.location_type))
 
         if self.uuid != corresponding_location.uuid:
             raise ValueError('corresponding location has different uuid [%s != %s]'
@@ -488,7 +491,7 @@ class JobLocation(Location):
         # Set configuration fields to write
         both_remote_or_local = not (self.is_remote() ^ corresponding_location.is_remote())
 
-        if self.location_type == JobLocationType.Source:
+        if self.location_type == JobLocation.TYPE_DESTINATION:
             if both_remote_or_local:
                 source = self.url.geturl()
                 source_container = self.container_subvolume_relpath
@@ -496,7 +499,7 @@ class JobLocation(Location):
             if both_remote_or_local or corresponding_location.is_remote():
                 destination = corresponding_location.url.geturl()
 
-        elif self.location_type == JobLocationType.Destination:
+        elif self.location_type == JobLocation.TYPE_DESTINATION:
             if both_remote_or_local:
                 destination = self.url.geturl()
 
@@ -509,7 +512,7 @@ class JobLocation(Location):
 
         parser = ConfigParser()
 
-        section = self.location_type.name
+        section = self.location_type
         parser.add_section(section)
         if location_uuid:
             parser.set(section, self.__KEY_UUID, str(location_uuid))
@@ -552,10 +555,10 @@ class JobLocation(Location):
         section = parser.sections()[0]
 
         # Section name implies location type
-        if section == JobLocationType.Source.name:
-            location_type = JobLocationType.Source
-        elif section == JobLocationType.Destination.name:
-            location_type = JobLocationType.Destination
+        if section == JobLocation.TYPE_SOURCE:
+            location_type = JobLocation.TYPE_SOURCE
+        elif section == JobLocation.TYPE_DESTINATION:
+            location_type = JobLocation.TYPE_DESTINATION
         else:
             raise ValueError('invalid section name/location type [%s]' % section)
 
@@ -579,7 +582,7 @@ class JobLocation(Location):
         compress = True if distutils.util.strtobool(parser.get(section, self.__KEY_COMPRESS, fallback='False')) \
             else False
 
-        if location_type == JobLocationType.Source:
+        if location_type == JobLocation.TYPE_SOURCE:
             # Amend url/container relpath from current path for source locations
             # if container relative path was not provided
             if not self.container_subvolume_relpath:
@@ -594,12 +597,12 @@ class JobLocation(Location):
 
             if destination:
                 corresponding_location = JobLocation(destination,
-                                                     location_type=JobLocationType.Destination)
+                                                     location_type=JobLocation.TYPE_DESTINATION)
 
-        elif location_type == JobLocationType.Destination:
+        elif location_type == JobLocation.TYPE_DESTINATION:
             if source:
                 corresponding_location = JobLocation(source,
-                                                     location_type=JobLocationType.Source,
+                                                     location_type=JobLocation.TYPE_SOURCE,
                                                      container_subvolume_relpath=source_container)
 
         self.location_type = location_type
@@ -651,8 +654,8 @@ class Job:
         :return: Backup job
         :rtype: Job
         """
-        source = JobLocation(source_url, location_type=JobLocationType.Source)
-        dest = JobLocation(dest_url, location_type=JobLocationType.Destination)
+        source = JobLocation(source_url, location_type=JobLocation.TYPE_SOURCE)
+        dest = JobLocation(dest_url, location_type=JobLocation.TYPE_DESTINATION)
 
         if source.has_configuration():
             raise Error('source is already initialized')
@@ -732,7 +735,7 @@ class Job:
             except subprocess.CalledProcessError:
                 handle_error(Error('could not read configuration [%s]' % corresponding_location.configuration_filename))
 
-        if location.location_type == JobLocationType.Source:
+        if location.location_type == JobLocation.TYPE_SOURCE:
             source = location
             dest = corresponding_location
         else:
