@@ -106,10 +106,17 @@ class Location:
 
     @url.setter
     def url(self, value: parse.SplitResult):
-        if not value.path.endswith(os.path.sep):
+        final_path = value.path
+        if not value.hostname:
+            final_path = os.path.abspath(final_path)
+
+        if not final_path.endswith(os.path.sep):
+            final_path += os.path.sep
+
+        if final_path != value.path:
             value = parse.SplitResult(value.scheme,
                                       value.netloc,
-                                      value.path + os.path.sep,
+                                      final_path,
                                       value.query, None)
         self.__url = value
 
