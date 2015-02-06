@@ -491,7 +491,7 @@ class JobLocation(Location):
         # Set configuration fields to write
         both_remote_or_local = not (self.is_remote() ^ corresponding_location.is_remote())
 
-        if self.location_type == JobLocation.TYPE_DESTINATION:
+        if self.location_type == JobLocation.TYPE_SOURCE:
             if both_remote_or_local:
                 source = self.url.geturl()
                 source_container = self.container_subvolume_relpath
