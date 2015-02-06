@@ -56,10 +56,12 @@ Initialize a backup job pushing snapshots of local subvolume **/** to remote sub
 
     btrfs-sxbackup init / ssh://root@mybackupserver.org:/backup/myhost
 
-Run backup job
---------------
+Run
+---
 
-.. code .:
+Run a backup job
+
+.. code ::
 
     btrfs-sxbackup run /backup/myhost
 
@@ -73,6 +75,18 @@ Cronjob performing a pull backup job
     # /etc/cron.d/btrfs-sxbackup
     PATH="/usr/sbin:/usr/bin:/sbin:/bin"
     30 2    * * *     root     btrfs-sxbackup /backup/myhost
+
+Changelog
+=========
+
+0.5.0
+-----
+* New command line interface
+* Source container subvolume path is now **.sxbackup** relative to the source subvolume and cannot be customized anylonger
+* Backups created with older versions are still supported. 
+  If you customized the source container subvolume, this will still work, but it's recommended to rename it 
+  to the new default (**.sxbackup**) and destroy and reinitialize the backup job subsequently.
+  Recreating a backup job will not remove any snapshots (unless --purge is used)
 
 Synopsis and options
 ====================
