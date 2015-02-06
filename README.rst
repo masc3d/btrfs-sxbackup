@@ -225,5 +225,4 @@ Changelog
 * Source container subvolume path is now **.sxbackup** relative to the source subvolume and cannot be customized anylonger
 * Backups created with older versions are still supported.
   If you customized the source container subvolume, this will still work, but it's recommended to rename it
-  to the new default (**.sxbackup**) and destroy and reinitialize the backup job subsequently.
-  Recreating a backup job will not remove any snapshots (unless --purge is used)
+  to the new default (**.sxbackup**) and update source and destination configuration files (.btrfs-sxbackup) accordingly
