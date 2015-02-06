@@ -41,72 +41,170 @@ Setup
 Usage examples
 ==============
 
-Pull snapshot backups of **/** on remote host **myhost.org** to local subvolume **/backup/myhost**
+Initialize
+----------
+
+Initialize a backup job pulling snapshots of subvolume **/** on remote host **myhost.org** to local subvolume **/backup/myhost**
 
 .. code ::
 
-    btrfs-sxbackup ssh://root@myhost.org:/ /backup/myhost
+    btrfs-sxbackup init ssh://root@myhost.org:/ /backup/myhost
 
-Push snapshot backups of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
+Initialize a backup job pushing snapshots of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
 
 .. code ::
 
-    btrfs-sxbackup / ssh://root@mybackupserver.org:/backup/myhost
+    btrfs-sxbackup init / ssh://root@mybackupserver.org:/backup/myhost
+
+Run backup job
+--------------
+
+.. code .:
+
+    btrfs-sxbackup run /backup/myhost
 
 Cron
 ----
 
-Cronjob performing a local and remote pull backup with customized source and destination housekeeping
+Cronjob performing a pull backup job
 
 .. code ::
 
     # /etc/cron.d/btrfs-sxbackup
     PATH="/usr/sbin:/usr/bin:/sbin:/bin"
-    30 2    * * *     root     btrfs-sxbackup / /mnt/backup/localsystem/ -sk 3 -dk "1d:4/d, 1w:daily, 2m:none"
-    0 3     * * *     root     btrfs-sxbackup ssh://root@remotesystem/ /mnt/backup/remotesystem/ -sk 3 -dk "1d:4/d, 1w:daily, 2m:none"
+    30 2    * * *     root     btrfs-sxbackup /backup/myhost
 
 Synopsis and options
 ====================
 
 .. code ::
 
-    usage: btrfs-sxbackup [-h] [-c] [-q] [-sk SOURCE_KEEP] [-dk DESTINATION_KEEP]
-                          [-ss SOURCE_CONTAINER_SUBVOLUME] [-m [MAIL]]
-                          [-li LOG_IDENT] [--version]
-                          source_subvolume destination_container_subvolume
-    
+    usage: btrfs-sxbackup [-h] [-q] [--trace] [--version]
+                          {init,destroy,update,run,info} ...
+
     positional arguments:
-      source_subvolume      Source subvolume to backup. Local path or SSH url.
-      destination_container_subvolume
-                            Destination subvolume receiving snapshots. Local path
-                            or SSH url.
-    
+      {init,destroy,update,run,info}
+        init                initialize backup job
+        destroy             destroy backup job
+        update              update backup job
+        run                 run backup job
+        info                backup job info
+
     optional arguments:
       -h, --help            show this help message and exit
-      -c, --compress        Enables compression during transmission, requires lzop
+      -q, --quiet           do not log to stdout
+      --trace               enables trace output
+      --version             show program's version number and exit
+
+init
+----
+
+.. code ::
+
+    usage: btrfs-sxbackup init [-h] [-sr SOURCE_RETENTION]
+                               [-dr DESTINATION_RETENTION] [-c]
+                               source-subvolume destination-subvolume
+
+    positional arguments:
+      source-subvolume      source subvolume to backup. local path or SSH url
+      destination-subvolume
+                            destination subvolume receiving backup snapshots.
+                            local path or SSH url
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -sr SOURCE_RETENTION, --source-retention SOURCE_RETENTION
+                            expression defining which source snapshots to
+                            retain/cleanup. can be a static number (of backups) or
+                            more complex expression like "1d:4/d, 1w:daily,
+                            2m:none" literally translating to: "1 day from now
+                            keep 4 backups a day, 1 week from now keep daily
+                            backups, 2 months from now keep none"
+      -dr DESTINATION_RETENTION, --destination-retention DESTINATION_RETENTION
+                            expression defining which destination snapshots to
+                            retain/cleanup. can be a static number (of backups) or
+                            more complex expression (see --source-retention
+                            argument)
+      -c, --compress        enables compression during transmission. Requires lzop
                             to be installed on both source and destination
-      -q, --quiet           Do not log to STDOUT
-      -sk SOURCE_KEEP, --source-keep SOURCE_KEEP
-                            Expression defining which source snapshots to
-                            keep/cleanup. Can be a static number (of backups) or
-                            more complex expression like "1d:4/d, 1w:daily, 2m:none"
-                            literally translating to: "1 day from now keep 4
-                            backups a day, 1 week from now keep daily backups, 2
-                            months from now keep none". Default is 10
-      -dk DESTINATION_KEEP, --destination-keep DESTINATION_KEEP
-                            Expression defining which destination snapshots to
-                            keep/cleanup. Can be a static number (of backups) or
-                            more complex expression (see --source-keep arguemnt).
-                            Default is 10
-      -ss SOURCE_CONTAINER_SUBVOLUME, --source-container-subvolume SOURCE_CONTAINER_SUBVOLUME
-                            Override path to source snapshot container subvolume.
-                            Both absolute and relative paths are possible. Default
-                            is 'sxbackup', relative to source subvolume
+
+run
+---
+
+.. code ::
+
+    usage: btrfs-sxbackup run [-h] [-m [MAIL]] [-li LOG_IDENT]
+                              subvolume [subvolume ...]
+
+    positional arguments:
+      subvolume             backup job source or destination subvolume. local path
+                            or SSH url
+
+    optional arguments:
+      -h, --help            show this help message and exit
       -m [MAIL], --mail [MAIL]
-                            Enables email notifications. If an email address is
+                            enables email notifications. If an email address is
                             given, it overrides the default email-recipient
                             setting in /etc/btrfs-sxbackup.conf
       -li LOG_IDENT, --log-ident LOG_IDENT
-                            Log ident used for syslog logging, defaults to script
+                            log ident used for syslog logging, defaults to script
                             name
-      --version             show program's version number and exit
+
+update
+------
+
+.. code ::
+
+    usage: btrfs-sxbackup update [-h] [-sr SOURCE_RETENTION]
+                                 [-dr DESTINATION_RETENTION] [-c]
+                                 subvolume [subvolume ...]
+
+    positional arguments:
+      subvolume             backup job source or destination subvolume. local path
+                            or SSH url
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -sr SOURCE_RETENTION, --source-retention SOURCE_RETENTION
+                            expression defining which source snapshots to
+                            retain/cleanup. can be a static number (of backups) or
+                            more complex expression like "1d:4/d, 1w:daily,
+                            2m:none" literally translating to: "1 day from now
+                            keep 4 backups a day, 1 week from now keep daily
+                            backups, 2 months from now keep none"
+      -dr DESTINATION_RETENTION, --destination-retention DESTINATION_RETENTION
+                            expression defining which destination snapshots to
+                            retain/cleanup. can be a static number (of backups) or
+                            more complex expression (see --source-retention
+                            argument)
+      -c, --compress        enables compression during transmission. Requires lzop
+                            to be installed on both source and destination
+
+info
+----
+
+.. code ::
+
+    usage: btrfs-sxbackup info [-h] subvolume [subvolume ...]
+
+    positional arguments:
+      subvolume   backup job source or destination subvolume. local path or SSH
+                  url
+
+    optional arguments:
+      -h, --help  show this help message and exit
+
+destroy
+-------
+
+.. code ::
+
+    usage: btrfs-sxbackup destroy [-h] [--purge] subvolume [subvolume ...]
+
+    positional arguments:
+      subvolume   backup job source or destination subvolume. local path or SSH
+                  url
+
+    optional arguments:
+      -h, --help  show this help message and exit
+      --purge     removes all backup snapshots from source and destination

@@ -53,9 +53,6 @@ def handle_exception(ex: Exception, email_recipient: str):
         except Exception as ex:
             logger.error(str(ex))
 
-#
-#
-
 # Parse arguments
 parser = ArgumentParser(prog=_APP_NAME)
 parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
@@ -93,7 +90,7 @@ subvolumes_args = ['subvolumes']
 subvolumes_kwargs = {'type': str,
                      'nargs': '+',
                      'metavar': 'subvolume',
-                     'help': 'backup job subvolume. local path or SSH url'}
+                     'help': 'backup job source or destination subvolume. local path or SSH url'}
 
 # Initialize command cmdline params
 p_init = subparsers.add_parser(_CMD_INIT, help='initialize backup job')
@@ -128,15 +125,6 @@ p_run.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=Non
 # Info command cmdline params
 p_info = subparsers.add_parser(_CMD_INFO, help='backup job info')
 p_info.add_argument(*subvolumes_args, **subvolumes_kwargs)
-
-# Send command cmdline params
-p_send = subparsers.add_parser(_CMD_SEND, help='send snapshot')
-p_send.add_argument('source-subvolume', type=str,
-                    help='name of the snapshot to transfer')
-p_send.add_argument('destination-subvolume', type=str,
-                    help='destination subvolume receiving the snapshot. local psth or SSH url')
-p_send.add_argument(*compress_args, **compress_kwargs)
-
 
 # Initialize logging
 args = parser.parse_args()
@@ -178,6 +166,8 @@ if args.command == _CMD_RUN:
 logger.setLevel(logging.INFO)
 logger.info('%s v%s' % (_APP_NAME, __version__))
 
+exitcode = 0
+
 try:
     if args.command == _CMD_RUN:
         for subvolume in args.subvolumes:
@@ -186,6 +176,7 @@ try:
                 job.run()
             except Exception as e:
                 handle_exception(e, email_recipient)
+                exitcode = 1
 
     elif args.command == _CMD_INIT:
         source_retention = RetentionExpression(args.source_retention) if args.source_retention else None
@@ -207,6 +198,7 @@ try:
                            compress=args.compress)
             except Exception as e:
                 handle_exception(e, email_recipient)
+                exitcode = 1
 
     elif args.command == _CMD_DESTROY:
         for subvolume in args.subvolumes:
@@ -215,6 +207,7 @@ try:
                 job.destroy(purge=args.purge)
             except Exception as e:
                 handle_exception(e, email_recipient)
+                exitcode = 1
 
     elif args.command == _CMD_INFO:
         for subvolume in args.subvolumes:
@@ -223,6 +216,7 @@ try:
                 job.print_info()
             except Exception as e:
                 handle_exception(e, email_recipient)
+                exitcode = 1
 
     elif args.command == _CMD_SEND:
         pass
@@ -231,9 +225,12 @@ except SystemExit as e:
     if e.code != 0:
         raise
 
+except KeyboardInterrupt as k:
+    exitcode = 1
+
 except Exception as e:
     handle_exception(e, email_recipient)
-    exit(1)
+    exitcode = 1
 
-exit(0)
+exit(exitcode)
 
