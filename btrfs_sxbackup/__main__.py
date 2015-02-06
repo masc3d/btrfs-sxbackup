@@ -68,7 +68,8 @@ subparsers.dest = 'command'
 compress_args = ['-c', '--compress']
 compress_kwargs = {'action': 'store_true',
                    'help': 'enables compression during transmission. Requires lzop to be installed on both source'
-                           ' and destination'}
+                           ' and destination',
+                   'default': None}
 
 source_retention_args = ['-sr', '--source-retention']
 source_retention_kwargs = {'type': str,
@@ -112,6 +113,7 @@ p_update.add_argument(*subvolumes_args, **subvolumes_kwargs)
 p_update.add_argument(*source_retention_args, **source_retention_kwargs)
 p_update.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_update.add_argument(*compress_args, **compress_kwargs)
+p_update.add_argument('-nc', '--no-compress', action='store_true', help='disable compression during transmission')
 
 # Run command cmdline params
 p_run = subparsers.add_parser(_CMD_RUN, help='run backup job')
@@ -195,7 +197,7 @@ try:
                 job = Job.load(urllib.parse.urlsplit(subvolume))
                 job.update(source_retention=source_retention,
                            dest_retention=dest_retention,
-                           compress=args.compress)
+                           compress=args.compress if args.compress else not args.no_compress)
             except Exception as e:
                 handle_exception(e, email_recipient)
                 exitcode = 1

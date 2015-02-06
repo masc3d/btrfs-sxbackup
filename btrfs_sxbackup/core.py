@@ -521,6 +521,7 @@ class JobLocation(Location):
 
         section = self.location_type
         parser.add_section(section)
+
         if location_uuid:
             parser.set(section, self.__KEY_UUID, str(location_uuid))
         if source:
@@ -774,9 +775,6 @@ class Job:
                         ' source [%s] != destination [%s].'
                         % (self.source.uuid, self.destination.uuid))
 
-        _logger.info(self.source)
-        _logger.info(self.destination)
-
         _logger.info('updating configurations')
 
         if source_retention:
@@ -785,11 +783,10 @@ class Job:
         if dest_retention:
             self.destination.retention = dest_retention
 
-        if compress:
+        if compress is not None:
             self.source.compress = self.destination.compress = compress
 
-        _logger.info(self.source)
-        _logger.info(self.destination)
+        self.print_info(include_snapshots=False)
 
         self.source.write_configuration(self.destination)
         self.destination.write_configuration(self.source)
@@ -841,21 +838,22 @@ class Job:
         self.source.destroy(purge=purge)
         self.destination.destroy(purge=purge)
 
-    def print_info(self):
+    def print_info(self, include_snapshots=True):
         source = self.source
         dest = self.destination
 
-        if self.source and source.location_type:
-            try:
-                self.source.retrieve_snapshot_names()
-            except Exception as e:
-                _logger.error(str(e))
+        if include_snapshots:
+            if self.source and source.location_type:
+                try:
+                    self.source.retrieve_snapshot_names()
+                except Exception as e:
+                    _logger.error(str(e))
 
-        if self.destination and dest.location_type:
-            try:
-                self.destination.retrieve_snapshot_names()
-            except Exception as e:
-                _logger.error(str(e))
+            if self.destination and dest.location_type:
+                try:
+                    self.destination.retrieve_snapshot_names()
+                except Exception as e:
+                    _logger.error(str(e))
 
         if (source and source.location_type) or (dest and dest.location_type):
             t_inset = 3
@@ -866,10 +864,12 @@ class Job:
             i['Source URL'] = source.url.geturl().rstrip(os.path.sep) if source else t_na
             i['Source container'] = source.container_subvolume_relpath.rstrip(os.path.sep) if source else t_na
             i['Source retention'] = str(source.retention) if source else t_na
-            i['Source snapshots'] = source.snapshot_names if source else t_na
+            if include_snapshots:
+                i['Source snapshots'] = source.snapshot_names if source else t_na
             i['Destination URL'] = dest.url.geturl().rstrip(os.path.sep) if dest else t_na
             i['Destination retention'] = str(dest.retention) if dest else t_na
-            i['Destination snapshots'] = dest.snapshot_names if dest else t_na
+            if include_snapshots:
+                i['Destination snapshots'] = dest.snapshot_names if dest else t_na
 
             width = len(max(i.keys(), key=lambda x: len(x))) + 1
 
