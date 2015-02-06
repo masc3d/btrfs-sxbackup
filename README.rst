@@ -4,7 +4,7 @@ btrfs-sxbackup
 Btrfs snapshot backup utility
 
 * Push/pull support via SSH
-* Housekeeping
+* Retention
 * Email notifications
 * Compression of transferred data
 * Syslog logging
