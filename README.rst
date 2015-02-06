@@ -76,18 +76,6 @@ Cronjob performing a pull backup job
     PATH="/usr/sbin:/usr/bin:/sbin:/bin"
     30 2    * * *     root     btrfs-sxbackup run /backup/myhost
 
-Changelog
-=========
-
-0.5.0
------
-* New command line interface
-* Source container subvolume path is now **.sxbackup** relative to the source subvolume and cannot be customized anylonger
-* Backups created with older versions are still supported. 
-  If you customized the source container subvolume, this will still work, but it's recommended to rename it 
-  to the new default (**.sxbackup**) and destroy and reinitialize the backup job subsequently.
-  Recreating a backup job will not remove any snapshots (unless --purge is used)
-
 Synopsis and options
 ====================
 
@@ -222,3 +210,20 @@ destroy
     optional arguments:
       -h, --help  show this help message and exit
       --purge     removes all backup snapshots from source and destination
+
+Changelog
+=========
+
+0.5.4
+-----
+* Python 3.3 compatibility fixes
+* Added proper support for relative paths passed to init
+
+0.5.0
+-----
+* New command line interface
+* Source container subvolume path is now **.sxbackup** relative to the source subvolume and cannot be customized anylonger
+* Backups created with older versions are still supported.
+  If you customized the source container subvolume, this will still work, but it's recommended to rename it
+  to the new default (**.sxbackup**) and destroy and reinitialize the backup job subsequently.
+  Recreating a backup job will not remove any snapshots (unless --purge is used)
