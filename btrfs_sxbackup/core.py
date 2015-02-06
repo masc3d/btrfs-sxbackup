@@ -18,16 +18,13 @@ from btrfs_sxbackup.entities import Subvolume
 
 
 _logger = logging.getLogger(__name__)
-_DEFAULT_RETENTION = '10'
+_DEFAULT_RETENTION_SOURCE = RetentionExpression('3')
+_DEFAULT_RETENTION_DESTINATION = RetentionExpression('2d: 1/d, 2w:3/w, 1m:1/w, 2m:none')
+_DEFAULT_CONTAINER_RELPATH = '.sxbackup'
 
 
 class Error(Exception):
     pass
-
-
-class LocationType(Enum):
-    Source = 0,
-    Destination = 1
 
 
 class Configuration:
@@ -91,77 +88,18 @@ class Configuration:
 
 
 class Location:
-    """ Backup location """
+    """
+    Location
+    """
 
-    __TEMP_SUBVOL_NAME = 'temp'
-    __CONFIG_FILENAME = '.btrfs-sxbackup'
-
-    # Configuration file keys
-    __KEY_UUID = 'uuid'
-    __KEY_SOURCE = 'source'
-    __KEY_SOURCE_CONTAINER = 'source-container'
-    __KEY_DESTINATION = 'destination'
-    __KEY_KEEP = 'keep'
-    __KEY_RETENTION = 'retention'
-    __KEY_COMPRESS = 'compress'
-
-    def __init__(self, url: parse.SplitResult, location_type: LocationType=None, container_subvolume_relpath: str=None):
-        """
-        c'tor
-        :param url: Location URL
-        """
+    def __init__(self, url: parse.SplitResult):
         if not url:
             raise ValueError('location url is mandatory')
 
         self.__logger = logging.getLogger(self.__class__.__name__)
-
-        self.__location_type = location_type
-        self.__uuid = None
         self.__url = None
-        self.__container_subvolume_relpath = None
-        self.__compress = False
-        self.__retention = None
-        self.__snapshot_names = []
 
         self.url = url
-
-        if location_type == LocationType.Source and container_subvolume_relpath is None:
-            self.container_subvolume_relpath = '.sxbackup'
-        else:
-            self.container_subvolume_relpath = container_subvolume_relpath
-
-    def __format_log_msg(self, msg) -> str:
-        name = self.__location_type.name if self.__location_type else None
-        return '%s :: %s' % (name.lower(), msg) if name else msg
-
-    def _log_info(self, msg):
-        self.__logger.info(self.__format_log_msg(msg))
-
-    def _log_debug(self, msg):
-        self.__logger.debug(self.__format_log_msg(msg))
-
-    @property
-    def snapshot_names(self) -> list:
-        """
-        Most recently retrieved snapshot names
-        """
-        return self.__snapshot_names
-
-    @property
-    def location_type(self) -> LocationType:
-        return self.__location_type
-
-    @location_type.setter
-    def location_type(self, location_type):
-        self.__location_type = location_type
-
-    @property
-    def uuid(self) -> UUID:
-        return self.__uuid
-
-    @uuid.setter
-    def uuid(self, value: UUID):
-        self.__uuid = value
 
     @property
     def url(self) -> parse.SplitResult:
@@ -175,6 +113,118 @@ class Location:
                                       value.path + os.path.sep,
                                       value.query, None)
         self.__url = value
+
+    def _format_log_msg(self, msg) -> str:
+        name = self.url.geturl()
+        return '%s :: %s' % (name.lower(), msg) if name else msg
+
+    def _log_info(self, msg):
+        self.__logger.info(self._format_log_msg(msg))
+
+    def _log_debug(self, msg):
+        self.__logger.debug(self._format_log_msg(msg))
+
+    def is_remote(self) -> bool:
+        return self.url.hostname is not None
+
+    def exec_check_output(self, cmd) -> bytes:
+        """
+        Wrapper for shell.exec_check_output
+        :param cmd: Command to execute
+        :return: output
+        """
+        return shell.exec_check_output(cmd, self.url)
+
+    def exec_call(self, cmd) -> int:
+        """
+        Wrapper for shell.exec_call
+        :param cmd: Command to execute
+        :return: returncode
+        """
+        return shell.exec_call(cmd, self.url)
+
+    def create_subprocess_args(self, cmd) -> list:
+        """
+        Wrapper for shell.create_subprocess_args, autmoatically passing location url
+        :param cmd: Command to execute
+        :return: subprocess args
+        """
+        return shell.create_subprocess_args(cmd, self.url)
+
+    def remove_subvolume(self, subvolume_path):
+        self._log_info('removing subvolume [%s]' % subvolume_path)
+        self.exec_check_output('btrfs sub del "%s"' % subvolume_path)
+
+    def __str__(self):
+        return self._format_log_msg('url [%s]' % (self.url.geturl()))
+
+
+class JobLocationType(Enum):
+    Source = 0,
+    Destination = 1
+
+
+class JobLocation(Location):
+    """
+    Backup job location
+    """
+    __TEMP_SUBVOL_NAME = 'temp'
+    __CONFIG_FILENAME = '.btrfs-sxbackup'
+
+    # Configuration file keys
+    __KEY_UUID = 'uuid'
+    __KEY_SOURCE = 'source'
+    __KEY_SOURCE_CONTAINER = 'source-container'
+    __KEY_DESTINATION = 'destination'
+    __KEY_KEEP = 'keep'
+    __KEY_RETENTION = 'retention'
+    __KEY_COMPRESS = 'compress'
+
+    def __init__(self, url: parse.SplitResult, location_type: JobLocationType=None, container_subvolume_relpath: str=None):
+        """
+        c'tor
+        :param url: Location URL
+        """
+        super().__init__(url)
+
+        self.__location_type = location_type
+        self.__uuid = None
+        self.__container_subvolume_relpath = None
+        self.__compress = False
+        self.__retention = None
+        self.__snapshot_names = []
+
+        if location_type == JobLocationType.Source and container_subvolume_relpath is None:
+            self.container_subvolume_relpath = _DEFAULT_CONTAINER_RELPATH
+        else:
+            self.container_subvolume_relpath = container_subvolume_relpath
+
+    def _format_log_msg(self, msg) -> str:
+        name = self.__location_type.name if self.__location_type else None
+        return '%s :: %s' % (name.lower(), msg) if name else msg
+
+    @property
+    def snapshot_names(self) -> list:
+        """
+        Most recently retrieved snapshot names
+        """
+        return self.__snapshot_names
+
+    @property
+    def location_type(self) -> JobLocationType:
+        return self.__location_type
+
+    @location_type.setter
+    def location_type(self, location_type):
+        self.__location_type = location_type
+
+    @property
+    def uuid(self) -> UUID:
+        return self.__uuid
+
+    @uuid.setter
+    def uuid(self, value: UUID):
+        self.__uuid = value
 
     @property
     def container_subvolume_relpath(self) -> str:
@@ -210,33 +260,6 @@ class Location:
     @property
     def configuration_filename(self) -> str:
         return os.path.join(self.container_subvolume_path, self.__CONFIG_FILENAME)
-
-    def is_remote(self) -> bool:
-        return self.url.hostname is not None
-
-    def exec_check_output(self, cmd) -> bytes:
-        """
-        Wrapper for shell.exec_check_output
-        :param cmd: Command to execute
-        :return: output
-        """
-        return shell.exec_check_output(cmd, self.url)
-
-    def exec_call(self, cmd) -> int:
-        """
-        Wrapper for shell.exec_call
-        :param cmd: Command to execute
-        :return: returncode
-        """
-        return shell.exec_call(cmd, self.url)
-
-    def create_subprocess_args(self, cmd) -> list:
-        """
-        Wrapper for shell.create_subprocess_args, autmoatically passing location url
-        :param cmd: Command to execute
-        :return: subprocess args
-        """
-        return shell.create_subprocess_args(cmd, self.url)
 
     def has_configuration(self):
         returncode = self.exec_call('if [ -f "%s" ] ; then exit 10; fi' % self.configuration_filename)
@@ -311,10 +334,6 @@ class Location:
 
         self.exec_check_output(cmd)
 
-    def remove_subvolume(self, subvolume_path):
-        self._log_info('removing subvolume [%s]' % subvolume_path)
-        self.exec_check_output('btrfs sub del "%s"' % subvolume_path)
-
     def remove_configuration(self):
         self._log_info('removing configuration')
         self.exec_check_output('rm "%s"' % self.configuration_filename)
@@ -348,7 +367,7 @@ class Location:
 
         self.remove_configuration()
 
-        if self.location_type == LocationType.Source and self.container_subvolume_relpath:
+        if self.location_type == JobLocationType.Source and self.container_subvolume_relpath:
             self.remove_subvolume(self.container_subvolume_path)
 
     def transfer_snapshot(self, name: str, target: 'Location'):
@@ -465,7 +484,7 @@ class Location:
         # Set configuration fields to write
         both_remote_or_local = not (self.is_remote() ^ corresponding_location.is_remote())
 
-        if self.location_type == LocationType.Source:
+        if self.location_type == JobLocationType.Source:
             if both_remote_or_local:
                 source = self.url.geturl()
                 source_container = self.container_subvolume_relpath
@@ -473,7 +492,7 @@ class Location:
             if both_remote_or_local or corresponding_location.is_remote():
                 destination = corresponding_location.url.geturl()
 
-        elif self.location_type == LocationType.Destination:
+        elif self.location_type == JobLocationType.Destination:
             if both_remote_or_local:
                 destination = self.url.geturl()
 
@@ -529,10 +548,10 @@ class Location:
         section = parser.sections()[0]
 
         # Section name implies location type
-        if section == LocationType.Source.name:
-            location_type = LocationType.Source
-        elif section == LocationType.Destination.name:
-            location_type = LocationType.Destination
+        if section == JobLocationType.Source.name:
+            location_type = JobLocationType.Source
+        elif section == JobLocationType.Destination.name:
+            location_type = JobLocationType.Destination
         else:
             raise ValueError('invalid section name/location type [%s]' % section)
 
@@ -556,7 +575,7 @@ class Location:
         compress = True if distutils.util.strtobool(parser.get(section, self.__KEY_COMPRESS, fallback='False')) \
             else False
 
-        if location_type == LocationType.Source:
+        if location_type == JobLocationType.Source:
             # Amend url/container relpath from current path for source locations
             # if container relative path was not provided
             if not self.container_subvolume_relpath:
@@ -570,14 +589,14 @@ class Location:
                 self.container_subvolume_relpath = source_container
 
             if destination:
-                corresponding_location = Location(destination,
-                                                  location_type=LocationType.Destination)
+                corresponding_location = JobLocation(destination,
+                                                     location_type=JobLocationType.Destination)
 
-        elif location_type == LocationType.Destination:
+        elif location_type == JobLocationType.Destination:
             if source:
-                corresponding_location = Location(source,
-                                                  location_type=LocationType.Source,
-                                                  container_subvolume_relpath=source_container)
+                corresponding_location = JobLocation(source,
+                                                     location_type=JobLocationType.Source,
+                                                     container_subvolume_relpath=source_container)
 
         self.location_type = location_type
         self.uuid = location_uuid
@@ -587,19 +606,20 @@ class Location:
         return corresponding_location
 
     def __str__(self):
-        return self.__format_log_msg('url [%s]%s retention [%s] compress [%s]'
-                                     % (self.url.geturl(),
-                                        (' container [%s]' % self.container_subvolume_relpath) if self.container_subvolume_relpath else '',
-                                        self.retention,
-                                        self.compress))
+        return self._format_log_msg('url [%s] %sretention [%s] compress [%s]'
+                                    % (self.url.geturl(),
+                                       ('container [%s] ' % self.container_subvolume_relpath)
+                                       if self.container_subvolume_relpath else '',
+                                       self.retention,
+                                       self.compress))
 
 
 class Job:
     """
-    Backup job, comprises a source and destination location and related tasks
+    Backup job, comprises a source and destination job location and related tasks
     """
 
-    def __init__(self, source: Location, dest: Location):
+    def __init__(self, source: JobLocation, dest: JobLocation):
         self.__source = source
         self.__dest = dest
 
@@ -627,8 +647,8 @@ class Job:
         :return: Backup job
         :rtype: Job
         """
-        source = Location(source_url, location_type=LocationType.Source)
-        dest = Location(dest_url, location_type=LocationType.Destination)
+        source = JobLocation(source_url, location_type=JobLocationType.Source)
+        dest = JobLocation(dest_url, location_type=JobLocationType.Destination)
 
         if source.has_configuration():
             raise Error('source is already initialized')
@@ -645,14 +665,14 @@ class Job:
         if not source.retention:
             source.retention = Configuration.instance().source_retention
         if not source.retention:
-            source.retention = RetentionExpression(_DEFAULT_RETENTION)
+            source.retention = RetentionExpression(_DEFAULT_RETENTION_SOURCE)
 
         if dest_retention:
             dest.retention = dest_retention
         if not dest.retention:
             dest.retention = Configuration.instance().destination_retention
         if not dest.retention:
-            dest.retention = RetentionExpression(_DEFAULT_RETENTION)
+            dest.retention = RetentionExpression(_DEFAULT_RETENTION_DESTINATION)
 
         if compress:
             source.compress = dest.compress = compress
@@ -691,10 +711,13 @@ class Job:
             else:
                 _logger.error(str(e))
 
-        location = Location(url)
+        location = JobLocation(url)
 
         corresponding_location = None
         try:
+            if not location.has_configuration():
+                location.container_subvolume_relpath = _DEFAULT_CONTAINER_RELPATH
+
             corresponding_location = location.read_configuration()
         except subprocess.CalledProcessError:
             handle_error(Error('could not read configuration [%s]' % location.configuration_filename))
@@ -705,7 +728,7 @@ class Job:
             except subprocess.CalledProcessError:
                 handle_error(Error('could not read configuration [%s]' % corresponding_location.configuration_filename))
 
-        if location.location_type == LocationType.Source:
+        if location.location_type == JobLocationType.Source:
             source = location
             dest = corresponding_location
         else:
