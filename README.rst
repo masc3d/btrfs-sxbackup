@@ -74,7 +74,7 @@ Cronjob performing a pull backup job
 
     # /etc/cron.d/btrfs-sxbackup
     PATH="/usr/sbin:/usr/bin:/sbin:/bin"
-    30 2    * * *     root     btrfs-sxbackup /backup/myhost
+    30 2    * * *     root     btrfs-sxbackup run /backup/myhost
 
 Changelog
 =========
