@@ -81,22 +81,23 @@ Synopsis and options
 
 .. code ::
 
-    usage: btrfs-sxbackup [-h] [-q] [--trace] [--version]
-                          {init,destroy,update,run,info} ...
+    usage: btrfs-sxbackup [-h] [-q] [--version] [-v]
+                          {init,destroy,update,run,info,transfer} ...
 
     positional arguments:
-      {init,destroy,update,run,info}
+      {init,destroy,update,run,info,transfer}
         init                initialize backup job
         destroy             destroy backup job
         update              update backup job
         run                 run backup job
         info                backup job info
+        transfer            transfer snapshot
 
     optional arguments:
       -h, --help            show this help message and exit
       -q, --quiet           do not log to stdout
-      --trace               enables trace output
       --version             show program's version number and exit
+      -v                    can be specified multiple times to increase verbosity
 
 init
 ----
@@ -108,10 +109,10 @@ init
                                source-subvolume destination-subvolume
 
     positional arguments:
-      source-subvolume      source subvolume to backup. local path or SSH url
+      source-subvolume      source subvolume to backup. local path or ssh url
       destination-subvolume
                             destination subvolume receiving backup snapshots.
-                            local path or SSH url
+                            local path or ssh url
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -210,6 +211,24 @@ destroy
     optional arguments:
       -h, --help  show this help message and exit
       --purge     removes all backup snapshots from source and destination
+
+transfer
+--------
+
+.. code ::
+
+    usage: btrfs-sxbackup transfer [-h] [-c]
+                                   source-subvolume destination-subvolume
+
+    positional arguments:
+      source-subvolume      source subvolume to transfer. local path or ssh url
+      destination-subvolume
+                            destination subvolume. local path or ssh url
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -c, --compress        enables compression during transmission. Requires lzop
+                            to be installed on both source and destination
 
 Changelog
 =========
