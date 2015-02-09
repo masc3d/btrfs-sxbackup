@@ -5,7 +5,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-def create_subprocess_args(cmd, url=None):
+def build_subprocess_args(cmd, url=None):
     """
     Create subprocess arguments for shell command/args to be executed
     Internally Wraps command into ssh call if url host name is not None
@@ -33,7 +33,7 @@ def exec_check_output(cmd, url=None) -> bytes:
     :param url: URL
     :return: output
     """
-    return subprocess.check_output(create_subprocess_args(cmd, url), stderr=subprocess.STDOUT)
+    return subprocess.check_output(build_subprocess_args(cmd, url), stderr=subprocess.STDOUT)
 
 
 def exec_call(cmd, url=None) -> int:
@@ -43,7 +43,7 @@ def exec_call(cmd, url=None) -> int:
     :param url: URL
     :return:
     """
-    return subprocess.call(create_subprocess_args(cmd, url), stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    return subprocess.call(build_subprocess_args(cmd, url), stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
 
 def exists(command, url=None):
@@ -53,7 +53,7 @@ def exists(command, url=None):
     :param url: url of remote host
     :return: True if location exists, otherwise False
     """
-    type_prc = subprocess.Popen(create_subprocess_args(['type ' + command], url),
+    type_prc = subprocess.Popen(build_subprocess_args(['type ' + command], url),
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE,
                                 shell=False)

@@ -152,15 +152,15 @@ class Location:
         """
         return shell.exec_call(cmd, self.url)
 
-    def create_subprocess_args(self, cmd) -> list:
+    def build_subprocess_args(self, cmd) -> list:
         """
         Wrapper for shell.create_subprocess_args, autmoatically passing location url
         :param cmd: Command to execute
         :return: subprocess args
         """
-        return shell.create_subprocess_args(cmd, self.url)
+        return shell.build_subprocess_args(cmd, self.url)
 
-    def create_path(self, path: str) -> str:
+    def build_path(self, path: str) -> str:
         """
         Creates a path in the context of this location.
         Relative paths will be joined with the location's url path
@@ -176,24 +176,24 @@ class Location:
             return os.path.join(self.url.path, path)
 
     def dir_exists(self, path) -> bool:
-        path = self.create_path(path)
+        path = self.build_path(path)
         returncode = self.exec_call('if [ -d "%s" ]; then exit 10; fi' % path)
         return returncode == 10
 
     def move_file(self, source_path: str, dest_path: str):
-        source_path = self.create_path(source_path)
-        dest_path = self.create_path(dest_path)
+        source_path = self.build_path(source_path)
+        dest_path = self.build_path(dest_path)
         self._log_debug('moving file [%s] -> [%s]' % (source_path, dest_path))
         self.exec_check_output('mv "%s" "%s"' % (source_path, dest_path))
 
     def remove_btrfs_subvolume(self, subvolume_path):
-        subvolume_path = self.create_path(subvolume_path)
+        subvolume_path = self.build_path(subvolume_path)
         self._log_info('removing subvolume [%s]' % subvolume_path)
         self.exec_check_output('if [ -d "%s" ]; then btrfs sub del "%s"; fi' % (subvolume_path, subvolume_path))
 
     def create_btrfs_snapshot(self, source_path, dest_path):
-        source_path = self.create_path(source_path)
-        dest_path = self.create_path(dest_path)
+        source_path = self.build_path(source_path)
+        dest_path = self.build_path(dest_path)
 
         # Create new temporary snapshot (source)
         self._log_info('creating snapshot')
@@ -207,9 +207,9 @@ class Location:
                                 source_parent_path: str=None,
                                 compress: bool=False):
 
-        source_path = self.create_path(source_path)
-        source_parent_path = self.create_path(source_parent_path) if source_parent_path else None
-        dest_path = dest.create_path(dest_path)
+        source_path = self.build_path(source_path)
+        source_parent_path = self.build_path(source_parent_path) if source_parent_path else None
+        dest_path = dest.build_path(dest_path)
 
         name = os.path.basename(source_path.rstrip(os.path.sep))
         final_dest_path = os.path.join(dest_path, name)
@@ -233,7 +233,7 @@ class Location:
             send_command_str += ' | lzop -1'
 
         try:
-            send_process = subprocess.Popen(self.create_subprocess_args(send_command_str),
+            send_process = subprocess.Popen(self.build_subprocess_args(send_command_str),
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE)
 
@@ -247,7 +247,7 @@ class Location:
             if compress:
                 receive_command_str = 'lzop -d | ' + receive_command_str
 
-            receive_process = subprocess.Popen(dest.create_subprocess_args(receive_command_str),
+            receive_process = subprocess.Popen(dest.build_subprocess_args(receive_command_str),
                                                stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
                                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -595,7 +595,7 @@ s       """
         config_str = fileobject.getvalue()
 
         # Write config file to location directory
-        p = subprocess.Popen(self.create_subprocess_args('cat > "%s"' % self.configuration_filename),
+        p = subprocess.Popen(self.build_subprocess_args('cat > "%s"' % self.configuration_filename),
                              stdin=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
         (out, err) = p.communicate(input=bytes(config_str, 'utf-8'))
@@ -882,7 +882,7 @@ class Job:
 
         # Create source snapshot
         temp_source_path = self.source.create_snapshot(temp_name)
-        temp_dest_path = self.destination.create_path(temp_name)
+        temp_dest_path = self.destination.build_path(temp_name)
 
         # Recovery handler
         def recover(l, warn_msg: str):
