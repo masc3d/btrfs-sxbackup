@@ -135,6 +135,7 @@ p_transfer.add_argument('source_subvolume', type=str, metavar='source-subvolume'
                         help='source subvolume to transfer. local path or ssh url')
 p_transfer.add_argument('destination_subvolume', type=str, metavar='destination-subvolume',
                         help='destination subvolume. local path or ssh url')
+p_transfer.add_argument(*compress_args, **compress_kwargs)
 
 # Initialize logging
 args = parser.parse_args()
@@ -236,7 +237,7 @@ try:
     elif args.command == _CMD_TRANSFER:
         source = Location(urllib.parse.urlsplit(args.source_subvolume))
         destination = Location(urllib.parse.urlsplit(args.destination_subvolume))
-        source.transfer_btrfs_snapshot(destination)
+        source.transfer_btrfs_snapshot(destination, compress=args.compress)
 
 except SystemExit as e:
     if e.code != 0:

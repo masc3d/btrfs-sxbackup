@@ -207,9 +207,6 @@ class Location:
                                 source_parent_path: str=None,
                                 compress: bool=False):
 
-        # Transfer temporary snapshot
-        self._log_info('transferring snapshot')
-
         source_path = self.create_path(source_path)
         source_parent_path = self.create_path(source_parent_path) if source_parent_path else None
         dest_path = dest.create_path(dest_path)
@@ -222,6 +219,9 @@ class Location:
 
         if dest.dir_exists(final_dest_path):
             raise Error('destination path [%s] already exists' % final_dest_path)
+
+        # Transfer temporary snapshot
+        self._log_info('transferring snapshot')
 
         # btrfs send command/subprocess
         if source_parent_path:
