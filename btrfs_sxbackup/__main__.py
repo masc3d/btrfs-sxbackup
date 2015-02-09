@@ -22,7 +22,7 @@ _CMD_SEND = 'send'
 _CMD_DESTROY = 'destroy'
 
 
-def handle_exception(ex: Exception, email_recipient: str):
+def handle_exception(ex: Exception, email_recipient: str, log_trace: bool=False):
     """
     Exception handler
     :param ex:
@@ -39,7 +39,7 @@ def handle_exception(ex: Exception, email_recipient: str):
             if len(output) > 0:
                 logger.error('%s' % output)
 
-    if args.trace:
+    if log_trace:
         # Log stack trace
         logger.error(traceback.format_exc())
 
@@ -57,8 +57,9 @@ def handle_exception(ex: Exception, email_recipient: str):
 parser = ArgumentParser(prog=_APP_NAME)
 parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=False,
                     help='do not log to stdout')
-parser.add_argument('--trace', dest='trace', action='store_true', default=False, help='enables trace output')
 parser.add_argument('--version', action='version', version='%s v%s' % (_APP_NAME, __version__))
+parser.add_argument('-v', dest='verbosity', action='count',
+                    help='can be specified multiple times to increase verbosity')
 
 subparsers = parser.add_subparsers()
 subparsers.required = True
@@ -165,7 +166,12 @@ if args.command == _CMD_RUN:
         log_memory_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
         logger.addHandler(log_memory_handler)
 
-logger.setLevel(logging.INFO)
+log_trace = False
+if args.verbosity and args.verbosity >= 1:
+    logger.setLevel(logging.DEBUG)
+    log_trace = True
+else:
+    logger.setLevel(logging.INFO)
 logger.info('%s v%s' % (_APP_NAME, __version__))
 
 exitcode = 0
@@ -177,7 +183,7 @@ try:
                 job = Job.load(urllib.parse.urlsplit(subvolume))
                 job.run()
             except Exception as e:
-                handle_exception(e, email_recipient)
+                handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
 
     elif args.command == _CMD_INIT:
@@ -199,7 +205,7 @@ try:
                            dest_retention=dest_retention,
                            compress=args.compress if args.compress else not args.no_compress)
             except Exception as e:
-                handle_exception(e, email_recipient)
+                handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
 
     elif args.command == _CMD_DESTROY:
@@ -208,7 +214,7 @@ try:
                 job = Job.load(urllib.parse.urlsplit(subvolume))
                 job.destroy(purge=args.purge)
             except Exception as e:
-                handle_exception(e, email_recipient)
+                handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
 
     elif args.command == _CMD_INFO:
@@ -217,7 +223,7 @@ try:
                 job = Job.load(urllib.parse.urlsplit(subvolume), raise_errors=False)
                 job.print_info()
             except Exception as e:
-                handle_exception(e, email_recipient)
+                handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
 
     elif args.command == _CMD_SEND:
@@ -231,7 +237,7 @@ except KeyboardInterrupt as k:
     exitcode = 1
 
 except Exception as e:
-    handle_exception(e, email_recipient)
+    handle_exception(e, email_recipient, log_trace)
     exitcode = 1
 
 exit(exitcode)

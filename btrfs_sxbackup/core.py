@@ -127,6 +127,9 @@ class Location:
     def _log_info(self, msg):
         self.__logger.info(self._format_log_msg(msg))
 
+    def _log_warn(self, msg):
+        self.__logger.warn(self._format_log_msg(msg))
+
     def _log_debug(self, msg):
         self.__logger.debug(self._format_log_msg(msg))
 
@@ -157,9 +160,129 @@ class Location:
         """
         return shell.create_subprocess_args(cmd, self.url)
 
-    def remove_subvolume(self, subvolume_path):
+    def create_path(self, path: str) -> str:
+        """
+        Creates a path in the context of this location.
+        Relative paths will be joined with the location's url path
+        :param path: Base path
+        :return: Contextual path
+        """
+        if not path:
+            return self.url.path
+
+        if path.startswith(os.path.sep):
+            return path
+        else:
+            return os.path.join(self.url.path, path)
+
+    def move_file(self, source_path: str, dest_path: str):
+        source_path = self.create_path(source_path)
+        dest_path = self.create_path(dest_path)
+        self._log_debug('moving file [%s] -> [%s]' % (source_path, dest_path))
+        self.exec_check_output('mv "%s" "%s"' % (source_path, dest_path))
+
+    def remove_btrfs_subvolume(self, subvolume_path):
+        subvolume_path = self.create_path(subvolume_path)
         self._log_info('removing subvolume [%s]' % subvolume_path)
-        self.exec_check_output('btrfs sub del "%s"' % subvolume_path)
+        self.exec_check_output('if [ -d "%s" ]; then btrfs sub del "%s"; fi' % (subvolume_path, subvolume_path))
+
+    def create_btrfs_snapshot(self, source_path, dest_path):
+        source_path = self.create_path(source_path)
+        dest_path = self.create_path(dest_path)
+
+        # Create new temporary snapshot (source)
+        self._log_info('creating snapshot')
+        self.exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
+                               % (source_path, dest_path))
+
+    def transfer_btrfs_snapshot(self, source_path: str,
+                                dest: 'Location',
+                                dest_path: str=None,
+                                source_parent_path: str=None,
+                                compress: bool=False):
+
+        # Transfer temporary snapshot
+        self._log_info('transferring snapshot')
+
+        source_path = self.create_path(source_path)
+        source_parent_path = self.create_path(source_parent_path)
+        dest_path = dest.create_path(dest_path)
+
+        name = os.path.basename(source_path.rstrip(os.path.sep))
+        if len(name) == 0:
+            raise ValueError('Source base name cannot be empty')
+
+        # btrfs send command/subprocess
+        if source_parent_path:
+            send_command_str = 'btrfs send -p "%s" "%s"' % (source_parent_path, source_path)
+        else:
+            send_command_str = 'btrfs send "%s"' % source_path
+
+        if compress:
+            send_command_str += ' | lzop -1'
+
+        try:
+            send_process = subprocess.Popen(self.create_subprocess_args(send_command_str),
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
+
+            # pv command/subprocess for progress indication
+            pv_process = None
+            if shell.exists('pv'):
+                pv_process = subprocess.Popen(['pv'], stdin=send_process.stdout, stdout=subprocess.PIPE)
+
+            # btrfs receive command/subprocess
+            receive_command_str = 'btrfs receive "%s"' % dest_path
+            if compress:
+                receive_command_str = 'lzop -d | ' + receive_command_str
+
+            receive_process = subprocess.Popen(dest.create_subprocess_args(receive_command_str),
+                                               stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
+                                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+            receive_returncode = None
+            send_returncode = None
+            while receive_returncode is None or send_returncode is None:
+                receive_returncode = receive_process.poll()
+                send_returncode = send_process.poll()
+
+                if receive_returncode is not None and receive_returncode != 0:
+                    try:
+                        send_process.kill()
+                    except ProcessLookupError:
+                        pass
+                    break
+
+                if send_returncode is not None and send_returncode != 0:
+                    try:
+                        receive_process.kill()
+                    except ProcessLookupError:
+                        pass
+                    break
+
+                time.sleep(2)
+
+            # Wait for commands to complete
+            send_returncode = send_process.wait()
+            receive_returncode = receive_process.wait()
+            if send_returncode:
+                raise subprocess.CalledProcessError(send_process.returncode,
+                                                    send_process.args,
+                                                    None)
+            if receive_returncode:
+                raise subprocess.CalledProcessError(receive_process.returncode,
+                                                    receive_process.args,
+                                                    receive_process.stdout.read())
+
+        except BaseException as e:
+            # Try to remove incomplete destination subvolume
+            final_dest_path = os.path.join(dest_path, name)
+            try:
+                self.remove_btrfs_subvolume(final_dest_path)
+            except Exception as e2:
+                self._log_warn('could not remove incomplete destination subvolume [%s]' % final_dest_path)
+
+            raise e
 
     def __str__(self):
         return self._format_log_msg('url [%s]' % (self.url.geturl()))
@@ -169,8 +292,8 @@ class JobLocation(Location):
     """
     Backup job location
     """
-    __TEMP_SUBVOL_NAME = 'temp'
     __CONFIG_FILENAME = '.btrfs-sxbackup'
+    __TEMP_BASENAME = '.temp'
 
     # Configuration file keys
     __KEY_UUID = 'uuid'
@@ -276,10 +399,11 @@ class JobLocation(Location):
         returncode = self.exec_call('if [ -f "%s" ] ; then exit 10; fi' % self.configuration_filename)
         return returncode == 10
 
+    def create_temp_name(self):
+        return '%s.%s' % (self.__TEMP_BASENAME, uuid.uuid4().hex)
+
     def prepare_environment(self):
         """ Prepare location environment """
-
-        temp_subvolume_path = os.path.join(self.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
 
         # Create container subvolume if it does not exist
         self.exec_check_output('if [ ! -d "%s" ] ; then btrfs sub create "%s"; fi' % (
@@ -289,8 +413,9 @@ class JobLocation(Location):
         self.exec_check_output('btrfs sub show "%s"' % self.container_subvolume_path)
 
         # Check and remove temporary snapshot volume (possible leftover of previously interrupted backup)
+        temp_subvolume_path = os.path.join(self.container_subvolume_path, self.__TEMP_BASENAME)
         self.exec_check_output(
-            'if [ -d "%s" ] ; then btrfs sub del "%s"; fi' % (temp_subvolume_path, temp_subvolume_path))
+            'if [ -d "%s"* ]; then btrfs sub del "%s"*; fi' % (temp_subvolume_path, temp_subvolume_path))
 
     def retrieve_snapshot_names(self):
         """ Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
@@ -330,13 +455,20 @@ class JobLocation(Location):
         return self.__snapshot_names
 
     def create_snapshot(self, name):
-        """ Creates a new (temporary) snapshot within container subvolume """
+        """
+        Creates a new snapshot within container subvolume
+        :param name: Name of snapshot
+        """
         # Create new temporary snapshot (source)
-        self._log_info('creating snapshot')
-        self.exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
-                               % (self.url.path, os.path.join(self.container_subvolume_path, name)))
+        dest_path = os.path.join(self.container_subvolume_path, name)
+        self.create_btrfs_snapshot(self.url.path, dest_path)
+        return dest_path
 
     def remove_snapshots(self, snapshots: list):
+        """
+        Remove snapshots from container subvolume
+        :param snapshots: Names of snapshots to remove
+        """
         if not snapshots or len(snapshots) == 0:
             return
 
@@ -346,6 +478,9 @@ class JobLocation(Location):
         self.exec_check_output(cmd)
 
     def remove_configuration(self):
+        """
+        Remove backup job configuration file
+s       """
         self._log_info('removing configuration')
         self.exec_check_output('rm "%s"' % self.configuration_filename)
 
@@ -380,97 +515,9 @@ class JobLocation(Location):
         self.remove_configuration()
 
         if (len(self.snapshot_names) == 0 and
-                self.location_type == JobLocation.TYPE_SOURCE and
+                    self.location_type == JobLocation.TYPE_SOURCE and
                 self.container_subvolume_relpath):
-            self.remove_subvolume(self.container_subvolume_path)
-
-    def transfer_snapshot(self, name: str, target: 'Location'):
-        # Create source snapshot
-        self.create_snapshot(self.__TEMP_SUBVOL_NAME)
-
-        # Transfer temporary snapshot
-        self._log_info('transferring snapshot')
-
-        temp_source_path = os.path.join(self.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
-        temp_dest_path = os.path.join(target.container_subvolume_path, self.__TEMP_SUBVOL_NAME)
-
-        # btrfs send command/subprocess
-        if len(self.snapshot_names) == 0:
-            send_command_str = 'btrfs send "%s"' % temp_source_path
-        else:
-            send_command_str = 'btrfs send -p "%s" "%s"' % (
-                os.path.join(self.container_subvolume_path, str(self.snapshot_names[0])),
-                temp_source_path)
-
-        if self.compress:
-            send_command_str += ' | lzop -1'
-
-        send_process = subprocess.Popen(self.create_subprocess_args(send_command_str),
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
-
-        # pv command/subprocess for progress indication
-        pv_process = None
-        if shell.exists('pv'):
-            pv_process = subprocess.Popen(['pv'], stdin=send_process.stdout, stdout=subprocess.PIPE)
-
-        # btrfs receive command/subprocess
-        receive_command_str = 'btrfs receive "%s"' % target.url.path
-        if self.compress:
-            receive_command_str = 'lzop -d | ' + receive_command_str
-
-        receive_process = subprocess.Popen(target.create_subprocess_args(receive_command_str),
-                                           stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
-                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-        receive_returncode = None
-        send_returncode = None
-        while receive_returncode is None or send_returncode is None:
-            receive_returncode = receive_process.poll()
-            send_returncode = send_process.poll()
-
-            if receive_returncode is not None and receive_returncode != 0:
-                try:
-                    send_process.kill()
-                except ProcessLookupError:
-                    pass
-                break
-
-            if send_returncode is not None and send_returncode != 0:
-                try:
-                    receive_process.kill()
-                except ProcessLookupError:
-                    pass
-                break
-
-            time.sleep(2)
-
-        # Wait for commands to complete
-        send_returncode = send_process.wait()
-        receive_returncode = receive_process.wait()
-        if send_returncode:
-            raise subprocess.CalledProcessError(send_process.returncode,
-                                                send_process.args,
-                                                None)
-        if receive_returncode:
-            raise subprocess.CalledProcessError(receive_process.returncode,
-                                                receive_process.args,
-                                                receive_process.stdout.read())
-
-        # After successful transmission, rename source and destination-side
-        # snapshot subvolumes (from pending to timestamp-based name)
-        final_source_path = os.path.join(self.container_subvolume_path, str(name))
-        final_target_path = os.path.join(target.url.path, str(name))
-        self.exec_check_output('mv "%s" "%s"' % (temp_source_path, final_source_path))
-        try:
-            target.exec_check_output('mv "%s" "%s"' % (temp_dest_path, final_target_path))
-        except Exception as e:
-            # Try to avoid inconsistent state by removing successfully created source snapshot
-            try:
-                self.remove_subvolume(final_source_path)
-            except Exception as e2:
-                self.__logger.error(e2)
-            raise e
+            self.remove_btrfs_subvolume(self.container_subvolume_path)
 
     def write_configuration(self, corresponding_location: 'Location'):
         """ Write configuration file to container subvolume """
@@ -816,7 +863,57 @@ class Job:
                                  which may indicate a system time problem'
                         % (new_snapshot_name, self.source.snapshot_names[0]))
 
-        self.source.transfer_snapshot(str(new_snapshot_name), self.destination)
+        temp_name = self.source.create_temp_name()
+
+        # btrfs send command/subprocess
+        if len(self.source.snapshot_names) > 0:
+            source_parent_path = os.path.join(self.source.container_subvolume_path, str(self.source.snapshot_names[0]))
+        else:
+            source_parent_path = None
+
+        # Create source snapshot
+        temp_source_path = self.source.create_snapshot(temp_name)
+        temp_dest_path = self.destination.create_path(temp_name)
+
+        try:
+            # Transfer temporary snapshot
+            self.source.transfer_btrfs_snapshot(temp_source_path,
+                                                self.destination,
+                                                source_parent_path=source_parent_path,
+                                                compress=self.source.compress)
+
+            final_source_path = os.path.join(self.source.container_subvolume_path, str(new_snapshot_name))
+            final_dest_path = os.path.join(self.destination.url.path, str(new_snapshot_name))
+
+            # Rename temporary source snapshot to final snapshot name
+            self.source.move_file(temp_source_path, final_source_path)
+
+        except BaseException as e:
+            try:
+                self.source.remove_btrfs_subvolume(temp_source_path)
+            except Exception as e2:
+                _logger.error(str(e2))
+                _logger.warn('could not remove temporary source snapshot [%s]' % temp_source_path)
+
+            try:
+                self.destination.remove_btrfs_subvolume(temp_dest_path)
+            except Exception as e3:
+                _logger.error(str(e3))
+                _logger.warn('could not remove temporary destination snapshot [%s]' % temp_dest_path)
+            raise e
+
+        try:
+            # Rename temporary destination snapshot to final snapshot name
+            self.destination.move_file(temp_dest_path, final_dest_path)
+        except Exception as e:
+            # Try to avoid inconsistent state by removing successfully created source snapshot
+            try:
+                self.source.remove_btrfs_subvolume(final_source_path)
+            except Exception as e2:
+                _logger.error(str(e2))
+                _logger.warn('could not remove source snapshot [%s] after failed finalization of destination snapshot'
+                             % final_source_path)
+            raise e
 
         # Update snapshot name lists
         self.source.snapshot_names.insert(0, new_snapshot_name)
