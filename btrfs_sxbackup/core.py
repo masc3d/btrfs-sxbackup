@@ -278,7 +278,7 @@ class Location:
             # Try to remove incomplete destination subvolume
             final_dest_path = os.path.join(dest_path, name)
             try:
-                self.remove_btrfs_subvolume(final_dest_path)
+                dest.remove_btrfs_subvolume(final_dest_path)
             except Exception as e2:
                 self._log_warn('could not remove incomplete destination subvolume [%s]' % final_dest_path)
 
@@ -875,31 +875,36 @@ class Job:
         temp_source_path = self.source.create_snapshot(temp_name)
         temp_dest_path = self.destination.create_path(temp_name)
 
+        # Recovery handler
+        def recover(l, warn_msg: str):
+            try:
+                l()
+            except Exception as e:
+                _logger.error(str(e))
+                _logger.warn(warn_msg)
+
         try:
             # Transfer temporary snapshot
             self.source.transfer_btrfs_snapshot(temp_source_path,
                                                 self.destination,
                                                 source_parent_path=source_parent_path,
                                                 compress=self.source.compress)
+        except BaseException as e:
+            recover(lambda: self.source.remove_btrfs_subvolume(temp_source_path),
+                    'could not remove temporary source snapshot [%s]' % temp_source_path)
+            raise e
 
+        try:
             final_source_path = os.path.join(self.source.container_subvolume_path, str(new_snapshot_name))
             final_dest_path = os.path.join(self.destination.url.path, str(new_snapshot_name))
 
             # Rename temporary source snapshot to final snapshot name
             self.source.move_file(temp_source_path, final_source_path)
-
         except BaseException as e:
-            try:
-                self.source.remove_btrfs_subvolume(temp_source_path)
-            except Exception as e2:
-                _logger.error(str(e2))
-                _logger.warn('could not remove temporary source snapshot [%s]' % temp_source_path)
-
-            try:
-                self.destination.remove_btrfs_subvolume(temp_dest_path)
-            except Exception as e3:
-                _logger.error(str(e3))
-                _logger.warn('could not remove temporary destination snapshot [%s]' % temp_dest_path)
+            recover(lambda: self.source.remove_btrfs_subvolume(temp_source_path),
+                    'could not remove temporary source snapshot [%s]' % temp_source_path)
+            recover(lambda: self.destination.remove_btrfs_subvolume(temp_dest_path),
+                    'could not remove temporary destination snapshot [%s]' % temp_dest_path)
             raise e
 
         try:
@@ -907,12 +912,11 @@ class Job:
             self.destination.move_file(temp_dest_path, final_dest_path)
         except Exception as e:
             # Try to avoid inconsistent state by removing successfully created source snapshot
-            try:
-                self.source.remove_btrfs_subvolume(final_source_path)
-            except Exception as e2:
-                _logger.error(str(e2))
-                _logger.warn('could not remove source snapshot [%s] after failed finalization of destination snapshot'
-                             % final_source_path)
+            recover(lambda: self.source.remove_btrfs_subvolume(final_source_path),
+                    'could not remove source snapshot [%s] after failed finalization of destination snapshot'
+                    % final_source_path)
+            recover(lambda: self.destination.remove_btrfs_subvolume(temp_dest_path),
+                    'could not remove temporary destination snapshot [%s]' % temp_dest_path)
             raise e
 
         # Update snapshot name lists
