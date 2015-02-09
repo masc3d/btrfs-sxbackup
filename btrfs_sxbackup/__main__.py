@@ -6,6 +6,7 @@ import urllib.parse
 from argparse import ArgumentParser
 from subprocess import CalledProcessError
 
+from btrfs_sxbackup.core import Location
 from btrfs_sxbackup.core import Job
 from btrfs_sxbackup.core import Configuration
 from btrfs_sxbackup.retention import RetentionExpression
@@ -18,9 +19,8 @@ _CMD_INIT = 'init'
 _CMD_UPDATE = 'update'
 _CMD_RUN = 'run'
 _CMD_INFO = 'info'
-_CMD_SEND = 'send'
 _CMD_DESTROY = 'destroy'
-
+_CMD_TRANSFER = 'transfer'
 
 def handle_exception(ex: Exception, email_recipient: str, log_trace: bool=False):
     """
@@ -97,9 +97,9 @@ subvolumes_kwargs = {'type': str,
 # Initialize command cmdline params
 p_init = subparsers.add_parser(_CMD_INIT, help='initialize backup job')
 p_init.add_argument('source_subvolume', type=str, metavar='source-subvolume',
-                    help='source subvolume to backup. local path or SSH url')
+                    help='source subvolume tobackup. local path or ssh url')
 p_init.add_argument('destination_subvolume', type=str, metavar='destination-subvolume',
-                    help='destination subvolume receiving backup snapshots. local path or SSH url')
+                    help='destination subvolume receiving backup snapshots. local path or ssh url')
 p_init.add_argument(*source_retention_args, **source_retention_kwargs)
 p_init.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_init.add_argument(*compress_args, **compress_kwargs)
@@ -128,6 +128,13 @@ p_run.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=Non
 # Info command cmdline params
 p_info = subparsers.add_parser(_CMD_INFO, help='backup job info')
 p_info.add_argument(*subvolumes_args, **subvolumes_kwargs)
+
+# Transfer
+p_transfer = subparsers.add_parser(_CMD_TRANSFER, help='transfer snapshot')
+p_transfer.add_argument('source_subvolume', type=str, metavar='source-subvolume',
+                        help='source subvolume to transfer. local path or ssh url')
+p_transfer.add_argument('destination_subvolume', type=str, metavar='destination-subvolume',
+                        help='destination subvolume. local path or ssh url')
 
 # Initialize logging
 args = parser.parse_args()
@@ -226,8 +233,10 @@ try:
                 handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
 
-    elif args.command == _CMD_SEND:
-        pass
+    elif args.command == _CMD_TRANSFER:
+        source = Location(urllib.parse.urlsplit(args.source_subvolume))
+        destination = Location(urllib.parse.urlsplit(args.destination_subvolume))
+        source.transfer_btrfs_snapshot(destination)
 
 except SystemExit as e:
     if e.code != 0:

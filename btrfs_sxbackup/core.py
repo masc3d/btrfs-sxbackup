@@ -175,6 +175,11 @@ class Location:
         else:
             return os.path.join(self.url.path, path)
 
+    def dir_exists(self, path) -> bool:
+        path = self.create_path(path)
+        returncode = self.exec_call('if [ -d "%s" ]; then exit 10; fi' % path)
+        return returncode == 10
+
     def move_file(self, source_path: str, dest_path: str):
         source_path = self.create_path(source_path)
         dest_path = self.create_path(dest_path)
@@ -195,8 +200,9 @@ class Location:
         self.exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
                                % (source_path, dest_path))
 
-    def transfer_btrfs_snapshot(self, source_path: str,
+    def transfer_btrfs_snapshot(self,
                                 dest: 'Location',
+                                source_path: str=None,
                                 dest_path: str=None,
                                 source_parent_path: str=None,
                                 compress: bool=False):
@@ -205,12 +211,17 @@ class Location:
         self._log_info('transferring snapshot')
 
         source_path = self.create_path(source_path)
-        source_parent_path = self.create_path(source_parent_path)
+        source_parent_path = self.create_path(source_parent_path) if source_parent_path else None
         dest_path = dest.create_path(dest_path)
 
         name = os.path.basename(source_path.rstrip(os.path.sep))
+        final_dest_path = os.path.join(dest_path, name)
+
         if len(name) == 0:
-            raise ValueError('Source base name cannot be empty')
+            raise ValueError('source base name cannot be empty')
+
+        if dest.dir_exists(final_dest_path):
+            raise Error('destination path [%s] already exists' % final_dest_path)
 
         # btrfs send command/subprocess
         if source_parent_path:
@@ -268,20 +279,18 @@ class Location:
             if send_returncode:
                 raise subprocess.CalledProcessError(send_process.returncode,
                                                     send_process.args,
-                                                    None)
+                                                    send_process.stderr.read())
             if receive_returncode:
                 raise subprocess.CalledProcessError(receive_process.returncode,
                                                     receive_process.args,
                                                     receive_process.stdout.read())
 
         except BaseException as e:
-            # Try to remove incomplete destination subvolume
-            final_dest_path = os.path.join(dest_path, name)
             try:
+                # Try to remove incomplete destination subvolume
                 dest.remove_btrfs_subvolume(final_dest_path)
             except Exception as e2:
                 self._log_warn('could not remove incomplete destination subvolume [%s]' % final_dest_path)
-
             raise e
 
     def __str__(self):
@@ -885,8 +894,8 @@ class Job:
 
         try:
             # Transfer temporary snapshot
-            self.source.transfer_btrfs_snapshot(temp_source_path,
-                                                self.destination,
+            self.source.transfer_btrfs_snapshot(self.destination,
+                                                source_path=temp_source_path,
                                                 source_parent_path=source_parent_path,
                                                 compress=self.source.compress)
         except BaseException as e:
@@ -985,4 +994,3 @@ class Job:
                             print('%s %s' % (label, s))
                     else:
                         print('%s %s' % (label.ljust(width).rjust(width + t_inset), i[label]))
-
