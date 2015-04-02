@@ -205,7 +205,12 @@ class RetentionExpression:
             """
             if self.end is not None:
                 (items, interval_items) = _splice(items, lambda i: self.start >= lambda_timestamp(i) > self.end)
-                (to_retain, to_remove) = self.__reduce(interval_items, self.amount)
+                # Reverse item list before reducing to avoid a newer item being kept for single item intervals
+                # on every iteration (run) which would effectively break retention, as items within those
+                # intervals would never age
+                (to_retain, to_remove) = self.__reduce(list(reversed(interval_items)), self.amount)
+
+                print(to_retain)
             else:
                 to_retain = items[:self.amount]
                 to_remove = items[self.amount:]
