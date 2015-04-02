@@ -209,8 +209,6 @@ class RetentionExpression:
                 # on every iteration (run) which would effectively break retention, as items within those
                 # intervals would never age
                 (to_retain, to_remove) = self.__reduce(list(reversed(interval_items)), self.amount)
-
-                print(to_retain)
             else:
                 to_retain = items[:self.amount]
                 to_remove = items[self.amount:]
