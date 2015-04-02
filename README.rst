@@ -233,6 +233,10 @@ transfer
 Changelog
 =========
 
+0.5.5
+-----
+* Fixed retention breakage which could occur when first/earliest expression kept 1 backup per interval
+
 0.5.4
 -----
 * Python 3.3 compatibility fixes
