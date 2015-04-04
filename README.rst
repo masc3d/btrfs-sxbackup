@@ -36,7 +36,8 @@ Installation
 
 Setup
 =====
-* When using ssh, public/private key authentication should be set up
+* when using ssh, public/private key authentication should be set up
+* btrfs currently does not support receiving snapshots for filesystems mounted with the subvol option, in which case you will get an error message on btrfs receive, prompting you to remount the destination filesystem with fs tree (meaning without the subvol option)
 
 Usage examples
 ==============
