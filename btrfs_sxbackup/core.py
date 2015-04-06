@@ -10,6 +10,7 @@ from configparser import ConfigParser
 from uuid import UUID
 from urllib import parse
 
+from btrfs_sxbackup.entities import Snapshot
 from btrfs_sxbackup.entities import SnapshotName
 from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup import shell
@@ -335,7 +336,7 @@ class JobLocation(Location):
         self.__container_subvolume_relpath = None
         self.__compress = False
         self.__retention = None
-        self.__snapshot_names = []
+        self.__snapshots = []
 
         self.location_type = location_type
 
@@ -349,11 +350,11 @@ class JobLocation(Location):
         return '%s :: %s' % (name.lower(), msg) if name else msg
 
     @property
-    def snapshot_names(self) -> list:
+    def snapshots(self) -> list:
         """
         Most recently retrieved snapshot names
         """
-        return self.__snapshot_names
+        return self.__snapshots
 
     @property
     def location_type(self):
@@ -411,7 +412,7 @@ class JobLocation(Location):
         return os.path.join(self.container_subvolume_path, self.__CONFIG_FILENAME)
 
     def has_configuration(self):
-        returncode = self.exec_call('if [ -f "%s" ] ; then exit 10; fi' % self.configuration_filename)
+        returncode = self.exec_call('if [ -f "%s" ]; then exit 10; fi' % self.configuration_filename)
         return returncode == 10
 
     def create_temp_name(self):
@@ -421,7 +422,7 @@ class JobLocation(Location):
         """ Prepare location environment """
 
         # Create container subvolume if it does not exist
-        self.exec_check_output('if [ ! -d "%s" ] ; then btrfs sub create "%s"; fi' % (
+        self.exec_check_output('if [ ! -d "%s" ]; then btrfs sub create "%s"; fi' % (
             self.container_subvolume_path, self.container_subvolume_path))
 
         # Check if path is actually a subvolume
@@ -432,11 +433,11 @@ class JobLocation(Location):
         self.exec_check_output(
             'if [ -d "%s"* ]; then btrfs sub del "%s"*; fi' % (temp_subvolume_path, temp_subvolume_path))
 
-    def retrieve_snapshot_names(self):
+    def retrieve_snapshots(self):
         """ Determine snapshot names. Snapshot names are sorted in reverse order (newest first).
         stored internally (self.snapshot_names) and also returned. """
 
-        self._log_info('retrieving snapshot names')
+        self._log_info('retrieving snapshots')
 
         output = self.exec_check_output('btrfs sub list -o "%s"' % self.container_subvolume_path)
 
@@ -458,16 +459,16 @@ class JobLocation(Location):
                                 % (self.url.path, subvol_path, subvol_inconsistent_path))
 
         # sort and return
-        snapshot_names = []
+        snapshots = []
         for sv in subvolumes:
             try:
-                snapshot_names.append(SnapshotName.parse(os.path.basename(sv.path)))
+                snapshots.append(Snapshot(SnapshotName.parse(os.path.basename(sv.path)), sv))
             except:
                 # skip snapshot names which cannot be parsed
                 pass
 
-        self.__snapshot_names = sorted(snapshot_names, key=lambda sn: sn.timestamp, reverse=True)
-        return self.__snapshot_names
+        self.__snapshots = sorted(snapshots, key=lambda s: s.name.timestamp, reverse=True)
+        return self.__snapshots
 
     def create_snapshot(self, name):
         """
@@ -501,9 +502,9 @@ s       """
 
     def cleanup_snapshots(self):
         """ Clean out excess backups/snapshots. The newst one (index 0) will always be kept. """
-        if self.__retention is not None and len(self.__snapshot_names) > 1:
-            (to_remove_by_condition, to_retain) = self.__retention.filter(self.__snapshot_names[1:],
-                                                                          lambda sn: sn.timestamp)
+        if self.__retention is not None and len(self.__snapshots) > 1:
+            (to_remove_by_condition, to_retain) = self.__retention.filter(self.__snapshots[1:],
+                                                                          lambda sn: sn.name.timestamp)
 
             for c in to_remove_by_condition.keys():
                 to_remove = to_remove_by_condition[c]
@@ -520,16 +521,16 @@ s       """
         Removes configuration file and (optionally) all snapshots
         :param purge: Purgs all snapshots in addition
         """
-        self.retrieve_snapshot_names()
+        self.retrieve_snapshots()
 
         if purge:
             self._log_info('purging all snapshots')
-            self.remove_snapshots(list(map(lambda x: str(x), self.snapshot_names)))
-            self.snapshot_names.clear()
+            self.remove_snapshots(list(map(lambda x: str(x.name), self.snapshots)))
+            self.snapshots.clear()
 
         self.remove_configuration()
 
-        if (len(self.snapshot_names) == 0 and
+        if (len(self.snapshots) == 0 and
                     self.location_type == JobLocation.TYPE_SOURCE and
                 self.container_subvolume_relpath):
             self.remove_btrfs_subvolume(self.container_subvolume_path)
@@ -868,21 +869,21 @@ class Job:
         self.destination.prepare_environment()
 
         # Retrieve snapshot names of both source and destination
-        self.source.retrieve_snapshot_names()
-        self.destination.retrieve_snapshot_names()
+        self.source.retrieve_snapshots()
+        self.destination.retrieve_snapshots()
 
         new_snapshot_name = SnapshotName()
-        if len(self.source.snapshot_names) > 0 \
-                and new_snapshot_name.timestamp <= self.source.snapshot_names[0].timestamp:
+        if len(self.source.snapshots) > 0 \
+                and new_snapshot_name.timestamp <= self.source.snapshots[0].name.timestamp:
             raise Error('current snapshot name [%s] would be older than newest existing snapshot [%s] \
                                  which may indicate a system time problem'
-                        % (new_snapshot_name, self.source.snapshot_names[0]))
+                        % (new_snapshot_name, self.source.snapshots[0].name))
 
         temp_name = self.source.create_temp_name()
 
         # btrfs send command/subprocess
-        if len(self.source.snapshot_names) > 0:
-            source_parent_path = os.path.join(self.source.container_subvolume_path, str(self.source.snapshot_names[0]))
+        if len(self.source.snapshots) > 0:
+            source_parent_path = os.path.join(self.source.container_subvolume_path, str(self.source.snapshots[0].name))
         else:
             source_parent_path = None
 
@@ -935,8 +936,8 @@ class Job:
             raise e
 
         # Update snapshot name lists
-        self.source.snapshot_names.insert(0, new_snapshot_name)
-        self.destination.snapshot_names.insert(0, new_snapshot_name)
+        self.source.snapshots.insert(0, Snapshot(new_snapshot_name, None))
+        self.destination.snapshots.insert(0, Snapshot(new_snapshot_name, None))
 
         # Clean out excess backups/snapshots
         self.source.cleanup_snapshots()
@@ -961,13 +962,13 @@ class Job:
         if include_snapshots:
             if self.source and source.location_type:
                 try:
-                    self.source.retrieve_snapshot_names()
+                    self.source.retrieve_snapshots()
                 except Exception as e:
                     _logger.error(str(e))
 
             if self.destination and dest.location_type:
                 try:
-                    self.destination.retrieve_snapshot_names()
+                    self.destination.retrieve_snapshots()
                 except Exception as e:
                     _logger.error(str(e))
 
@@ -982,12 +983,12 @@ class Job:
             i['Source container'] = source.container_subvolume_relpath.rstrip(os.path.sep) if source else t_na
             i['Source retention'] = str(source.retention) if source else t_na
             if include_snapshots:
-                i['Source snapshots'] = source.snapshot_names if source else t_na
+                i['Source snapshots'] = source.snapshots if source else t_na
             i['Destination URL'] = dest.url.geturl().rstrip(os.path.sep) if dest else t_na
             i['Destination info'] = '%s, %s' % (dest.get_kernel_version(), dest.get_btrfs_progs_version())
             i['Destination retention'] = str(dest.retention) if dest else t_na
             if include_snapshots:
-                i['Destination snapshots'] = dest.snapshot_names if dest else t_na
+                i['Destination snapshots'] = dest.snapshots if dest else t_na
 
             width = len(max(i.keys(), key=lambda x: len(x))) + 1
 

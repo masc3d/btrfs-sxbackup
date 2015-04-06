@@ -4,6 +4,10 @@ from datetime import datetime
 
 
 class SnapshotName:
+    """
+    sxbackup snapshot name
+    """
+
     __regex = re.compile('^sx-([0-9]{4})([0-9]{2})([0-9]{2})-([0-9]{2})([0-9]{2})([0-9]{2})-utc$', re.IGNORECASE)
 
     def __init__(self, timestamp=None):
@@ -48,6 +52,10 @@ class SnapshotName:
 
 
 class Subvolume(object):
+    """
+    btrfs subvolume
+    """
+
     __regex = re.compile('^ID ([0-9]+).*gen ([0-9]+).*top level ([0-9]+).*path (.+).*$', re.IGNORECASE)
 
     def __init__(self, subvol_id, gen, top_level, path):
@@ -93,3 +101,29 @@ class Subvolume(object):
             gen=int(m.group(2)),
             top_level=int(m.group(3)),
             path=m.group(4))
+
+
+class Snapshot:
+    """
+    sxbackup snapshot
+    """
+
+    def __init__(self, name: SnapshotName, subvolume: Subvolume):
+        self.__name = name
+        self.__subvolume = subvolume
+
+    @property
+    def name(self):
+        return self.__name
+
+    @property
+    def subvolume(self):
+        return self.__subvolume
+
+    def __repr__(self):
+        return 'Snapshot(name=%s, subvolume=%s)' % self.name, self.subvolume
+
+    def __str__(self):
+        """ Create formatted snapshot name """
+        return self.name.timestamp.strftime('sx-%Y%m%d-%H%M%S-utc')
+
