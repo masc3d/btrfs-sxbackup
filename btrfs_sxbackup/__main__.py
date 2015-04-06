@@ -104,7 +104,9 @@ p_init.add_argument(*source_retention_args, **source_retention_kwargs)
 p_init.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_init.add_argument(*compress_args, **compress_kwargs)
 
-p_destroy = subparsers.add_parser(_CMD_DESTROY, help='destroy backup job')
+p_destroy = subparsers.add_parser(_CMD_DESTROY, help='destroy backup job by removing configuration files from source'
+                                                     ' and destination. backup snapshots will be kept on both sides'
+                                                     ' by default.')
 p_destroy.add_argument(*subvolumes_args, **subvolumes_kwargs)
 p_destroy.add_argument('--purge', action='store_true', help='removes all backup snapshots from source and destination')
 

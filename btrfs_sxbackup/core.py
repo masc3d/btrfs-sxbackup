@@ -175,6 +175,12 @@ class Location:
         else:
             return os.path.join(self.url.path, path)
 
+    def get_kernel_version(self):
+        return self.exec_check_output('uname -srvo').decode().strip()
+
+    def get_btrfs_progs_version(self):
+        return self.exec_check_output('btrfs version').decode().strip()
+
     def dir_exists(self, path) -> bool:
         path = self.build_path(path)
         returncode = self.exec_call('if [ -d "%s" ]; then exit 10; fi' % path)
@@ -972,11 +978,13 @@ class Job:
             i['UUID'] = source.uuid if source else dest.uuid if dest else t_na
             i['Compress'] = str(source.compress) if source else dest.compress if dest else t_na
             i['Source URL'] = source.url.geturl().rstrip(os.path.sep) if source else t_na
+            i['Source info'] = '%s, %s' % (source.get_kernel_version(), source.get_btrfs_progs_version())
             i['Source container'] = source.container_subvolume_relpath.rstrip(os.path.sep) if source else t_na
             i['Source retention'] = str(source.retention) if source else t_na
             if include_snapshots:
                 i['Source snapshots'] = source.snapshot_names if source else t_na
             i['Destination URL'] = dest.url.geturl().rstrip(os.path.sep) if dest else t_na
+            i['Destination info'] = '%s, %s' % (dest.get_kernel_version(), dest.get_btrfs_progs_version())
             i['Destination retention'] = str(dest.retention) if dest else t_na
             if include_snapshots:
                 i['Destination snapshots'] = dest.snapshot_names if dest else t_na
