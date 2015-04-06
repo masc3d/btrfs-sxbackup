@@ -41,7 +41,7 @@ Setup
 Known limitations
 =================
 * the destination filesystem has to be mounted without the subvol option, otherwise an error will occur on btrfs receive prompting you to remount with fs tree
-* some commands (like *update*) may not be available for backup jobs created with older versions of btrfs-sxbackup. in this case you can recreate backup jobs using *destroy* and *init*. existing snapshots will be kept as long as you do **not** invoke *destroy* with *--purge*.
+* some commands (like *update*) may not be available for backup jobs created with older versions of btrfs-sxbackup. in this case backup jobs can be recreated using *destroy* and *init*. existing snapshots will be kept as long as *destroy* is **not** invoked with *--purge*.
 
 Usage examples
 ==============
