@@ -1,7 +1,7 @@
 import re
 
 from datetime import datetime
-
+from datetime import timezone
 
 class SnapshotName:
     """
@@ -40,7 +40,8 @@ class SnapshotName:
                              day=int(match.group(3)),
                              hour=int(match.group(4)),
                              minute=int(match.group(5)),
-                             second=int(match.group(6)))
+                             second=int(match.group(6)),
+                             tzinfo=timezone.utc)
         return SnapshotName(timestamp)
 
     def __repr__(self):
@@ -49,6 +50,9 @@ class SnapshotName:
     def __str__(self):
         """ Create formatted snapshot name """
         return self.__timestamp.strftime('sx-%Y%m%d-%H%M%S-utc')
+
+    def format(self):
+        return '%s: %s' % (self, self.__timestamp.astimezone().strftime("%c (%z)"))
 
 
 class Subvolume(object):
@@ -126,4 +130,7 @@ class Snapshot:
     def __str__(self):
         """ Create formatted snapshot name """
         return self.name.timestamp.strftime('sx-%Y%m%d-%H%M%S-utc')
+
+    def format(self):
+        return self.name.format()
 

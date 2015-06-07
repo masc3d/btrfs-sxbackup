@@ -983,12 +983,12 @@ class Job:
             i['Source container'] = source.container_subvolume_relpath.rstrip(os.path.sep) if source else t_na
             i['Source retention'] = str(source.retention) if source else t_na
             if include_snapshots:
-                i['Source snapshots'] = source.snapshots if source else t_na
+                i['Source snapshots'] = list(map(lambda x: x.format(), source.snapshots)) if source else t_na
             i['Destination URL'] = dest.url.geturl().rstrip(os.path.sep) if dest else t_na
             i['Destination info'] = '%s, %s' % (dest.get_kernel_version(), dest.get_btrfs_progs_version())
             i['Destination retention'] = str(dest.retention) if dest else t_na
             if include_snapshots:
-                i['Destination snapshots'] = dest.snapshots if dest else t_na
+                i['Destination snapshots'] = list(map(lambda x: x.format(), dest.snapshots)) if dest else t_na
 
             width = len(max(i.keys(), key=lambda x: len(x))) + 1
 
