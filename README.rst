@@ -238,6 +238,10 @@ transfer
 Changelog
 =========
 
+0.5.7
+-----
+* ADDED local timestamps to info, resolving #14
+
 0.5.6
 -----
 * Fixed #13 "update" command always activates compression, regardless of -c
