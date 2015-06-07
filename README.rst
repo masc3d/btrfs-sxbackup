@@ -238,6 +238,10 @@ transfer
 Changelog
 =========
 
+0.5.6
+-----
+* Fixed #13 "update" command always activates compression, regardless of -c
+
 0.5.5
 -----
 * Fixed retention breakage which could occur when first/earliest expression kept 1 backup per interval
