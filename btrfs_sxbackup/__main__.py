@@ -21,6 +21,9 @@ _CMD_RUN = 'run'
 _CMD_INFO = 'info'
 _CMD_DESTROY = 'destroy'
 _CMD_TRANSFER = 'transfer'
+_CMD_FILES = 'files'
+_CMD_FILES_NEW = 'new'
+
 
 def handle_exception(ex: Exception, email_recipient: str, log_trace: bool=False):
     """
@@ -213,7 +216,9 @@ try:
                 job = Job.load(urllib.parse.urlsplit(subvolume))
                 job.update(source_retention=source_retention,
                            dest_retention=dest_retention,
-                           compress=args.compress if args.compress else not args.no_compress)
+                           compress=args.compress if args.compress else
+                           not args.no_compress if args.no_compress else
+                           None)
             except Exception as e:
                 handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
