@@ -4,6 +4,7 @@ import sys
 import time
 from datetime import datetime
 from datetime import timedelta
+from datetime import timezone
 
 from btrfs_sxbackup.entities import SnapshotName
 from btrfs_sxbackup.retention import RetentionExpression
@@ -17,7 +18,7 @@ class TestKeepExpression(unittest.TestCase):
 
         # Generate series of snapshot names
         snapshot_names = list()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for i in range(0, 24 * 120):
             timestamp = now - timedelta(hours=i)
             sn = SnapshotName(timestamp=timestamp)

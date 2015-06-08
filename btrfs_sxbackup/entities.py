@@ -16,7 +16,10 @@ class SnapshotName:
         :param timestamp: Timestamp
         """
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
+
+        if timestamp.tzinfo is None:
+            raise ValueError('Timestamp should be aware (have timezone info)')
 
         self.__timestamp = timestamp
 
