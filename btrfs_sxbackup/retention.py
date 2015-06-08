@@ -4,6 +4,7 @@ import math
 import re
 from datetime import datetime
 from datetime import timedelta
+from datetime import timezone
 
 
 def _splice(items_to_splice, lambda_condition):
@@ -345,7 +346,7 @@ class RetentionExpression:
         items_to_retain = list()
         items_to_remove_by_condition = collections.OrderedDict()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         conditions = self.__create_applicable_conditions(now)
 
         # Splice recent items (newer than first condition age)
