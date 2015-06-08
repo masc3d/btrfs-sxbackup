@@ -238,6 +238,10 @@ transfer
 Changelog
 =========
 
+0.5.8
+-----
+* FIXED job won't run due to inconsistent  datetime comparison (offset-naive/aware)
+
 0.5.7
 -----
 * ADDED local timestamps to info, resolving #14
