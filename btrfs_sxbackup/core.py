@@ -187,6 +187,10 @@ class Location:
         returncode = self.exec_call('if [ -d "%s" ]; then exit 10; fi' % path)
         return returncode == 10
 
+    def touch(self, path):
+        path = self.build_path(path)
+        self.exec_check_output('touch "%s"' % path)
+
     def move_file(self, source_path: str, dest_path: str):
         source_path = self.build_path(source_path)
         dest_path = self.build_path(dest_path)
@@ -475,6 +479,9 @@ class JobLocation(Location):
         Creates a new snapshot within container subvolume
         :param name: Name of snapshot
         """
+        # Touch source volume root, updating its mtime
+        self.touch(self.url.path)
+
         # Create new temporary snapshot (source)
         dest_path = os.path.join(self.container_subvolume_path, name)
         self.create_btrfs_snapshot(self.url.path, dest_path)
