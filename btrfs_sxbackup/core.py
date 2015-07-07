@@ -547,16 +547,17 @@ s       """
         if not self.location_type:
             raise ValueError('missing location type')
 
-        if not corresponding_location.location_type:
-            raise ValueError('missing corresponding location type')
+        if corresponding_location:
+            if not corresponding_location.location_type:
+                raise ValueError('missing corresponding location type')
 
-        if self.location_type == corresponding_location.location_type:
-            raise ValueError('invalid corresponding lcoation type [%s] for this location [%s]'
-                             % (corresponding_location, self.location_type))
+            if self.location_type == corresponding_location.location_type:
+                raise ValueError('invalid corresponding lcoation type [%s] for this location [%s]'
+                                 % (corresponding_location, self.location_type))
 
-        if self.uuid != corresponding_location.uuid:
-            raise ValueError('corresponding location has different uuid [%s != %s]'
-                             % (self.uuid, corresponding_location.uuid))
+            if self.uuid != corresponding_location.uuid:
+                raise ValueError('corresponding location has different uuid [%s != %s]'
+                                 % (self.uuid, corresponding_location.uuid))
 
         location_uuid = self.uuid
         source = None
@@ -566,21 +567,21 @@ s       """
         compress = self.compress
 
         # Set configuration fields to write
-        both_remote_or_local = not (self.is_remote() ^ corresponding_location.is_remote())
+        both_remote_or_local = not (self.is_remote() ^ (corresponding_location is not None and corresponding_location.is_remote()))
 
         if self.location_type == JobLocation.TYPE_SOURCE:
             if both_remote_or_local:
                 source = self.url.geturl()
                 source_container = self.container_subvolume_relpath
 
-            if both_remote_or_local or corresponding_location.is_remote():
+            if corresponding_location and (both_remote_or_local or corresponding_location.is_remote()):
                 destination = corresponding_location.url.geturl()
 
         elif self.location_type == JobLocation.TYPE_DESTINATION:
             if both_remote_or_local:
                 destination = self.url.geturl()
 
-            if both_remote_or_local or corresponding_location.is_remote():
+            if corresponding_location and (both_remote_or_local or corresponding_location.is_remote()):
                 source = corresponding_location.url.geturl()
                 source_container = corresponding_location.container_subvolume_relpath
 
@@ -733,16 +734,18 @@ class Job:
         :rtype: Job
         """
         source = JobLocation(source_url, location_type=JobLocation.TYPE_SOURCE)
-        dest = JobLocation(dest_url, location_type=JobLocation.TYPE_DESTINATION)
+        dest = JobLocation(dest_url, location_type=JobLocation.TYPE_DESTINATION) if dest_url else None
 
         if source.has_configuration():
             raise Error('source is already initialized')
 
-        if dest.has_configuration():
+        if dest and dest.has_configuration():
             raise Error('destination is already initialized')
 
         # New uuid for both locations
-        dest.uuid = source.uuid = uuid.uuid4()
+        source.uuid = uuid.uuid4()
+        if dest:
+            dest.uuid = source.uuid
 
         # Set parameters
         if source_retention:
@@ -752,31 +755,37 @@ class Job:
         if not source.retention:
             source.retention = RetentionExpression(_DEFAULT_RETENTION_SOURCE)
 
-        if dest_retention:
-            dest.retention = dest_retention
-        if not dest.retention:
-            dest.retention = Configuration.instance().destination_retention
-        if not dest.retention:
-            dest.retention = RetentionExpression(_DEFAULT_RETENTION_DESTINATION)
+        if dest:
+            if dest_retention:
+                dest.retention = dest_retention
+            if not dest.retention:
+                dest.retention = Configuration.instance().destination_retention
+            if not dest.retention:
+                dest.retention = RetentionExpression(_DEFAULT_RETENTION_DESTINATION)
 
         if compress:
-            source.compress = dest.compress = compress
+            source.compress = compress
+            if dest:
+                dest.compress = compress
         if not source.compress:
             source.compress = False
-        if not dest.compress:
+        if dest and not dest.compress:
             dest.compress = False
 
         # Prepare environments
         _logger.info('preparing source and destination environment')
         source.prepare_environment()
-        dest.prepare_environment()
+        if dest:
+            dest.prepare_environment()
 
         # Writing configurations
         source.write_configuration(dest)
-        dest.write_configuration(source)
+        if dest:
+            dest.write_configuration(source)
 
         _logger.info(source)
-        _logger.info(dest)
+        if dest:
+            _logger.info(dest)
 
         _logger.info('initialized successfully')
 
@@ -820,9 +829,6 @@ class Job:
             dest = location
             source = corresponding_location
 
-        if not dest:
-            handle_error(Error('location nas no destination information'))
-
         if not source:
             handle_error(Error('location has no source information'))
 
@@ -836,11 +842,11 @@ class Job:
         :param dest_retention: Destination retention
         :param compress: Compress
         """
-        if not self.source.uuid or not self.destination.uuid:
+        if not self.source.uuid or (self.destination and not self.destination.uuid):
             raise Error('update of existing locations requires uuids. this backup job was presumably created'
                         ' with an older version.')
 
-        if self.source.uuid != self.destination.uuid:
+        if self.destination and self.source.uuid != self.destination.uuid:
             raise Error('update of existing locations requires consistent location uuids,'
                         ' source [%s] != destination [%s].'
                         % (self.source.uuid, self.destination.uuid))
@@ -851,15 +857,20 @@ class Job:
             self.source.retention = source_retention
 
         if dest_retention:
+            if self.destination is None:
+                raise Error('backup job has no destination')
             self.destination.retention = dest_retention
 
         if compress is not None:
-            self.source.compress = self.destination.compress = compress
+            self.source.compress = compress
+            if self.destination:
+                self.destination.compress = compress
 
         self.print_info(include_snapshots=False)
 
         self.source.write_configuration(self.destination)
-        self.destination.write_configuration(self.source)
+        if self.destination:
+            self.destination.write_configuration(self.source)
 
         _logger.info('updated successfully')
 
@@ -868,16 +879,19 @@ class Job:
         starting_time = time.monotonic()
 
         _logger.info(self.source)
-        _logger.info(self.destination)
+        if self.destination:
+            _logger.info(self.destination)
 
         # Prepare environments
         _logger.info('preparing environment')
         self.source.prepare_environment()
-        self.destination.prepare_environment()
+        if self.destination:
+            self.destination.prepare_environment()
 
         # Retrieve snapshot names of both source and destination
         self.source.retrieve_snapshots()
-        self.destination.retrieve_snapshots()
+        if self.destination:
+            self.destination.retrieve_snapshots()
 
         new_snapshot_name = SnapshotName()
         if len(self.source.snapshots) > 0 \
@@ -896,9 +910,8 @@ class Job:
 
         # Create source snapshot
         temp_source_path = self.source.create_snapshot(temp_name)
-        temp_dest_path = self.destination.build_path(temp_name)
 
-        # Recovery handler
+        # Recovery handler, swallows all exceptions and logs them
         def recover(l, warn_msg: str):
             try:
                 l()
@@ -906,49 +919,58 @@ class Job:
                 _logger.error(str(e))
                 _logger.warn(warn_msg)
 
-        try:
-            # Transfer temporary snapshot
-            self.source.transfer_btrfs_snapshot(self.destination,
-                                                source_path=temp_source_path,
-                                                source_parent_path=source_parent_path,
-                                                compress=self.source.compress)
-        except BaseException as e:
-            recover(lambda: self.source.remove_btrfs_subvolume(temp_source_path),
-                    'could not remove temporary source snapshot [%s]' % temp_source_path)
-            raise e
+        temp_dest_path = None
+        final_dest_path = None
+        # Transfer temporary snapshot
+        if self.destination:
+            temp_dest_path = self.destination.build_path(temp_name)
+            final_dest_path = os.path.join(self.destination.url.path, str(new_snapshot_name))
+
+            try:
+                self.source.transfer_btrfs_snapshot(self.destination,
+                                                    source_path=temp_source_path,
+                                                    source_parent_path=source_parent_path,
+                                                    compress=self.source.compress)
+            except BaseException as e:
+                recover(lambda: self.source.remove_btrfs_subvolume(temp_source_path),
+                        'could not remove temporary source snapshot [%s]' % temp_source_path)
+                raise e
 
         try:
             final_source_path = os.path.join(self.source.container_subvolume_path, str(new_snapshot_name))
-            final_dest_path = os.path.join(self.destination.url.path, str(new_snapshot_name))
 
             # Rename temporary source snapshot to final snapshot name
             self.source.move_file(temp_source_path, final_source_path)
         except BaseException as e:
             recover(lambda: self.source.remove_btrfs_subvolume(temp_source_path),
                     'could not remove temporary source snapshot [%s]' % temp_source_path)
-            recover(lambda: self.destination.remove_btrfs_subvolume(temp_dest_path),
-                    'could not remove temporary destination snapshot [%s]' % temp_dest_path)
+            if self.destination:
+                recover(lambda: self.destination.remove_btrfs_subvolume(temp_dest_path),
+                        'could not remove temporary destination snapshot [%s]' % temp_dest_path)
             raise e
 
-        try:
-            # Rename temporary destination snapshot to final snapshot name
-            self.destination.move_file(temp_dest_path, final_dest_path)
-        except Exception as e:
-            # Try to avoid inconsistent state by removing successfully created source snapshot
-            recover(lambda: self.source.remove_btrfs_subvolume(final_source_path),
-                    'could not remove source snapshot [%s] after failed finalization of destination snapshot'
-                    % final_source_path)
-            recover(lambda: self.destination.remove_btrfs_subvolume(temp_dest_path),
-                    'could not remove temporary destination snapshot [%s]' % temp_dest_path)
-            raise e
+        if self.destination:
+            try:
+                # Rename temporary destination snapshot to final snapshot name
+                self.destination.move_file(temp_dest_path, final_dest_path)
+            except Exception as e:
+                # Try to avoid inconsistent state by removing successfully created source snapshot
+                recover(lambda: self.source.remove_btrfs_subvolume(final_source_path),
+                        'could not remove source snapshot [%s] after failed finalization of destination snapshot'
+                        % final_source_path)
+                recover(lambda: self.destination.remove_btrfs_subvolume(temp_dest_path),
+                        'could not remove temporary destination snapshot [%s]' % temp_dest_path)
+                raise e
 
         # Update snapshot name lists
         self.source.snapshots.insert(0, Snapshot(new_snapshot_name, None))
-        self.destination.snapshots.insert(0, Snapshot(new_snapshot_name, None))
+        if self.destination:
+            self.destination.snapshots.insert(0, Snapshot(new_snapshot_name, None))
 
         # Clean out excess backups/snapshots
         self.source.cleanup_snapshots()
-        self.destination.cleanup_snapshots()
+        if self.destination:
+            self.destination.cleanup_snapshots()
 
         _logger.info('backup %s created successfully in %s'
                      % (new_snapshot_name,
@@ -960,42 +982,44 @@ class Job:
         :param purge: Purge all snapshots
         """
         self.source.destroy(purge=purge)
-        self.destination.destroy(purge=purge)
+        if self.destination:
+            self.destination.destroy(purge=purge)
 
     def print_info(self, include_snapshots=True):
-        source = self.source
-        dest = self.destination
+        src = self.source
+        dst = self.destination
 
         if include_snapshots:
-            if self.source and source.location_type:
+            if src and src.location_type:
                 try:
-                    self.source.retrieve_snapshots()
+                    src.retrieve_snapshots()
                 except Exception as e:
                     _logger.error(str(e))
 
-            if self.destination and dest.location_type:
+            if dst and dst.location_type:
                 try:
-                    self.destination.retrieve_snapshots()
+                   dst.retrieve_snapshots()
                 except Exception as e:
                     _logger.error(str(e))
 
-        if (source and source.location_type) or (dest and dest.location_type):
+        if (src and src.location_type) or (dst and dst.location_type):
             t_inset = 3
             t_na = 'n/a'
             i = collections.OrderedDict()
-            i['UUID'] = source.uuid if source else dest.uuid if dest else t_na
-            i['Compress'] = str(source.compress) if source else dest.compress if dest else t_na
-            i['Source URL'] = source.url.geturl().rstrip(os.path.sep) if source else t_na
-            i['Source info'] = '%s, %s' % (source.get_kernel_version(), source.get_btrfs_progs_version())
-            i['Source container'] = source.container_subvolume_relpath.rstrip(os.path.sep) if source else t_na
-            i['Source retention'] = str(source.retention) if source else t_na
+            i['UUID'] = src.uuid if src else dst.uuid if dst else t_na
+            i['Compress'] = str(src.compress) if src else dst.compress if dst else t_na
+            i['Source URL'] = src.url.geturl().rstrip(os.path.sep) if src else t_na
+            i['Source info'] = '%s, %s' % (src.get_kernel_version(), src.get_btrfs_progs_version())
+            i['Source container'] = src.container_subvolume_relpath.rstrip(os.path.sep) if src else t_na
+            i['Source retention'] = str(src.retention) if src else t_na
             if include_snapshots:
-                i['Source snapshots'] = list(map(lambda x: x.format(), source.snapshots)) if source else t_na
-            i['Destination URL'] = dest.url.geturl().rstrip(os.path.sep) if dest else t_na
-            i['Destination info'] = '%s, %s' % (dest.get_kernel_version(), dest.get_btrfs_progs_version())
-            i['Destination retention'] = str(dest.retention) if dest else t_na
-            if include_snapshots:
-                i['Destination snapshots'] = list(map(lambda x: x.format(), dest.snapshots)) if dest else t_na
+                i['Source snapshots'] = list(map(lambda x: x.format(), src.snapshots)) if src else t_na
+            if dst:
+                i['Destination URL'] = dst.url.geturl().rstrip(os.path.sep) if dst else t_na
+                i['Destination info'] = '%s, %s' % (dst.get_kernel_version(), dst.get_btrfs_progs_version())
+                i['Destination retention'] = str(dst.retention) if dst else t_na
+                if include_snapshots:
+                    i['Destination snapshots'] = list(map(lambda x: x.format(), dst.snapshots)) if dst else t_na
 
             width = len(max(i.keys(), key=lambda x: len(x))) + 1
 
@@ -1004,9 +1028,9 @@ class Job:
                 if value:
                     if isinstance(value, list):
                         for j in range(0, len(value)):
-                            s = value[j]
+                            src = value[j]
                             label = label.ljust(width) if j == 0 else ''.ljust(width)
                             label = label.rjust(width + t_inset)
-                            print('%s %s' % (label, s))
+                            print('%s %s' % (label, src))
                     else:
                         print('%s %s' % (label.ljust(width).rjust(width + t_inset), i[label]))

@@ -101,8 +101,8 @@ subvolumes_kwargs = {'type': str,
 p_init = subparsers.add_parser(_CMD_INIT, help='initialize backup job')
 p_init.add_argument('source_subvolume', type=str, metavar='source-subvolume',
                     help='source subvolume tobackup. local path or ssh url')
-p_init.add_argument('destination_subvolume', type=str, metavar='destination-subvolume',
-                    help='destination subvolume receiving backup snapshots. local path or ssh url')
+p_init.add_argument('destination_subvolume', type=str, metavar='destination-subvolume', nargs='?', default=None,
+                    help='optional destination subvolume receiving backup snapshots. local path or ssh url')
 p_init.add_argument(*source_retention_args, **source_retention_kwargs)
 p_init.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_init.add_argument(*compress_args, **compress_kwargs)
@@ -204,7 +204,8 @@ try:
         destination_retention = RetentionExpression(args.destination_retention) if args.destination_retention else None
         job = Job.init(source_url=urllib.parse.urlsplit(args.source_subvolume),
                        source_retention=source_retention,
-                       dest_url=urllib.parse.urlsplit(args.destination_subvolume),
+                       dest_url=urllib.parse.urlsplit(args.destination_subvolume) if args.destination_subvolume
+                       else None,
                        dest_retention=destination_retention,
                        compress=args.compress)
 
