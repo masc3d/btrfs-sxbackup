@@ -238,6 +238,10 @@ transfer
 Changelog
 =========
 
+0.5.9
+-----
+* ADDED license headers to all source files, no functional changes
+
 0.5.8
 -----
 * FIXED job won't run due to inconsistent  datetime comparison (offset-naive/aware)
