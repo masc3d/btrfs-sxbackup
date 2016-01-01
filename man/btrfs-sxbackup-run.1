@@ -1,0 +1,24 @@
+.TH "btrfs-sxbackup-run" "1" "0.5.9" "Marco Schindler" ""
+.SH "NAME"
+.LP 
+btrfs\-sxbackup\-run \- Run a backup job
+.SH "SYNOPSIS"
+.LP 
+\fBbtrfs\-sxbackup run\fR [\-h] [\-m <mail_address>] [\-li <log_ident>] <subvolume> [<subvolume> ...]
+.SH "DESCRIPTION"
+.LP 
+Run a \fBbtrfs\-sxbackup\fR job.
+.SH "OPTIONS"
+.LP 
+.TP 
+\fB<subvolume>\fR
+backup job source or destination subvolume. local path or SSH url
+.TP 
+\fB\-m\fR <mail_address>, \fB\-\-mail\fR <mail_address>
+enables email notifications. If an email address is given, it overrides the default email\-recipient setting in \fB/etc/btrfs\-sxbackup.conf\fR
+.TP 
+\fB\-li\fR <log_ident>, \fB\-\-log\-ident\fR <log_ident>
+log ident used for syslog logging, defaults to script name
+.SH "SEE ALSO"
+.LP 
+btrfs\-sxbackup(1)

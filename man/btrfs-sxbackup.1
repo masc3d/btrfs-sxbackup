@@ -1,0 +1,70 @@
+.TH "btrfs-sxbackup" "1" "0.5.8" "" ""
+.SH "NAME"
+.LP 
+\fBbtrfs\-sxbackup\fR \- a btrfs snapshot backup utility
+.SH "SYNOPSIS"
+.LP 
+\fBbtrfs\-sxbackup\fR [\-h | \-\-help] [\-q | \-\-quiet] [\-v] [\-\-version]
+.SH "DESCRIPTION"
+.LP 
+Btrfs snapshot backup utility with push/pull support via SSH, retention, email notifications, compression of transferred data, and syslog logging.
+.SH "OPTIONS"
+.LP 
+.TP 
+\fB\-h\fR, \fB\-\-help\fR
+show help message and exit
+.TP 
+\fB\-q\fR, \fB\-\-quiet\fR
+do not log to stdout
+.TP 
+\fB\-\-version\fR
+show program's version number and exit
+.TP 
+\fB\-v\fR
+can be specified multiple times to increase verbosity
+.SH "EXAMPLES"
+.LP 
+.SS
+Initialize
+Initialize a backup job pulling snapshots of subvolume \fB/\fR on remote host \fBmyhost.org\fR to local subvolume \fB/backup/myhost\fR:
+
+.nf 
+.RS
+btrfs\-sxbackup init ssh://root@myhost.org:/ /backup/myhost
+.RE
+.fi 
+
+Initialize a backup job pushing snapshots of local subvolume \fB/\fR to remote subvolume \fB/backup/myhost\fR on host \fBmybackupserver.org\fR:
+
+.nf 
+.RS
+btrfs\-sxbackup init / ssh://root@mybackupserver.org:/backup/myhost
+.RE
+.fi 
+
+.LP 
+.SS
+Run
+Run a backup job:
+
+.nf 
+.RS
+btrfs\-sxbackup run /backup/myhost
+.RE
+.fi 
+
+.LP 
+.SS
+Cron
+Cronjob performing a pull backup job:
+
+.nf 
+.RS
+# /etc/cron.d/btrfs\-sxbackup
+PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+30 2    * * *     root     btrfs\-sxbackup run /backup/myhost
+.RE
+.fi 
+.SH "SEE ALSO"
+.LP 
+btrfs\-sxbackup\-init(1), btrfs\-sxbackup\-run(1), btrfs\-sxbackup\-info(1), btrfs\-sxbackup\-update(1), btrfs\-sxbackup\-destroy(1), btrfs\-sxbackup\-transfer(1)

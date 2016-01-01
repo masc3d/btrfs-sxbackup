@@ -1,0 +1,30 @@
+.TH "btrfs-sxbackup-update" "1" "0.5.9" "Marco Schindler" ""
+.SH "NAME"
+.LP 
+btrfs\-sxbackup\-update \- Update a backup job
+.SH "SYNOPSIS"
+.LP 
+\fBbtrfs\-sxbackup update\fR [\-h] [\-sr <source_retention>] [\-dr <destination_retention>] [\-c] <subvolume> [<subvolume> ...]
+.SH "DESCRIPTION"
+.LP 
+Update a \fBbtrfs\-sxbackup\fR job.
+.SH "OPTIONS"
+.LP 
+.TP 
+\fB<subvolume>\fR
+backup job source or destination subvolume. local path or SSH url
+.TP 
+\fB\-h\fR, \fB\-\-help\fR
+show help message and exit
+.TP 
+\fB\-sr\fR <source_retention>, \fB\-\-source\-retention\fR <source_retention>
+expression defining which source snapshots to retain/cleanup. can be a static number (of backups) or more complex expression like "1d:4/d, 1w:daily, 2m:none" literally translating to: "1 day from now keep 4 backups a day, 1 week from now keep daily backups, 2 months from now keep none"
+.TP 
+\fB\-dr\fR <destination_retention>, \fB\-\-destination\-retention\fR <destination_retention>
+expression defining which destination snapshots to retain/cleanup. can be a static number (of backups) or more complex expression (see \fB\-\-source\-retention\fR argument)
+.TP 
+\fB\-c\fR, \fB\-\-compress\fR
+enables compression during transmission. Requires lzop to be installed on both source and destination
+.SH "SEE ALSO"
+.LP 
+btrfs\-sxbackup(1), btrfs\-sxbackup\-init(1)
