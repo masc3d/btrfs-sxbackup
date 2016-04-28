@@ -122,7 +122,12 @@ class Snapshot:
     sxbackup snapshot
     """
 
-    def __init__(self, name: SnapshotName, subvolume: Subvolume):
+    def __init__(self, name: SnapshotName, subvolume):
+        """
+        :param name:
+        :param subvolume:
+        :type subvolume: Subvolume, None
+        """
         self.__name = name
         self.__subvolume = subvolume
 

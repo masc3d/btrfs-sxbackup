@@ -23,7 +23,6 @@ from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup import shell
 from btrfs_sxbackup.entities import Subvolume
 
-
 _logger = logging.getLogger(__name__)
 _DEFAULT_RETENTION_SOURCE = RetentionExpression('3')
 _DEFAULT_RETENTION_DESTINATION = RetentionExpression('2d: 1/d, 2w:3/w, 1m:1/w, 2m:none')
@@ -122,10 +121,11 @@ class Location:
             final_path += os.path.sep
 
         if final_path != value.path:
-            value = parse.SplitResult(value.scheme,
-                                      value.netloc,
-                                      final_path,
-                                      value.query, None)
+            value = parse.SplitResult(scheme=value.scheme,
+                                      netloc=value.netloc,
+                                      path=final_path,
+                                      query=value.query,
+                                      fragment=None)
         self.__url = value
 
     def _format_log_msg(self, msg) -> str:
@@ -220,10 +220,10 @@ class Location:
 
     def transfer_btrfs_snapshot(self,
                                 dest: 'Location',
-                                source_path: str=None,
-                                dest_path: str=None,
-                                source_parent_path: str=None,
-                                compress: bool=False):
+                                source_path: str = None,
+                                dest_path: str = None,
+                                source_parent_path: str = None,
+                                compress: bool = False):
 
         source_path = self.build_path(source_path)
         source_parent_path = self.build_path(source_parent_path) if source_parent_path else None
@@ -335,7 +335,7 @@ class JobLocation(Location):
     TYPE_DESTINATION = 'Destination'
 
     def __init__(self, url: parse.SplitResult, location_type=None,
-                 container_subvolume_relpath: str=None):
+                 container_subvolume_relpath: str = None):
         """
         c'tor
         :param url: Location URL
@@ -514,11 +514,21 @@ s       """
         self._log_info('removing configuration')
         self.exec_check_output('rm "%s"' % self.configuration_filename)
 
-    def cleanup_snapshots(self):
-        """ Clean out excess backups/snapshots. The newst one (index 0) will always be kept. """
-        if self.__retention is not None and len(self.__snapshots) > 1:
-            (to_remove_by_condition, to_retain) = self.__retention.filter(self.__snapshots[1:],
-                                                                          lambda sn: sn.name.timestamp)
+    def purge_snapshots(self, retention: RetentionExpression = None):
+        """
+        Purge snapshots
+        :param retention: Optional override of location's retention
+        :type retention: RetentionExpression
+        """
+        if retention is None:
+            retention = self.__retention
+        else:
+            self._log_info('Retention expression override [%s]' % retention)
+
+        """ Clean out excess backups/snapshots. The newest one (index 0) will always be kept. """
+        if retention is not None and len(self.__snapshots) > 1:
+            (to_remove_by_condition, to_retain) = retention.filter(self.__snapshots[1:],
+                                                                   lambda sn: sn.name.timestamp)
 
             for c in to_remove_by_condition.keys():
                 to_remove = to_remove_by_condition[c]
@@ -549,8 +559,10 @@ s       """
                 self.container_subvolume_relpath):
             self.remove_btrfs_subvolume(self.container_subvolume_path)
 
-    def write_configuration(self, corresponding_location: 'Location'):
-        """ Write configuration file to container subvolume """
+    def write_configuration(self, corresponding_location: 'JobLocation'):
+        """ Write configuration file to container subvolume 
+        :type corresponding_location: JobLocation
+        """
         if not self.location_type:
             raise ValueError('missing location type')
 
@@ -574,7 +586,8 @@ s       """
         compress = self.compress
 
         # Set configuration fields to write
-        both_remote_or_local = not (self.is_remote() ^ (corresponding_location is not None and corresponding_location.is_remote()))
+        both_remote_or_local = not (
+            self.is_remote() ^ (corresponding_location is not None and corresponding_location.is_remote()))
 
         if self.location_type == JobLocation.TYPE_SOURCE:
             if both_remote_or_local:
@@ -624,7 +637,7 @@ s       """
         if p.wait():
             raise subprocess.CalledProcessError(returncode=p.returncode, cmd=p.args, output=out)
 
-    def read_configuration(self) -> 'Location':
+    def read_configuration(self) -> 'JobLocation':
         """
         Read configuration file from container subvolume
         :return: Corresponding location
@@ -673,10 +686,11 @@ s       """
             # if container relative path was not provided
             if not self.container_subvolume_relpath:
                 source_container = os.path.basename(self.container_subvolume_path.rstrip(os.path.sep))
-                source = parse.SplitResult(self.url.scheme,
-                                           self.url.netloc,
-                                           os.path.abspath(os.path.join(self.url.path, os.path.pardir)),
-                                           self.url.query, None)
+                source = parse.SplitResult(scheme=self.url.scheme,
+                                           netloc=self.url.netloc,
+                                           path=os.path.abspath(os.path.join(self.url.path, os.path.pardir)),
+                                           query=self.url.query,
+                                           fragment=None)
 
                 self.url = source
                 self.container_subvolume_relpath = source_container
@@ -727,9 +741,9 @@ class Job:
     @staticmethod
     def init(source_url: parse.SplitResult,
              dest_url: parse.SplitResult,
-             source_retention: RetentionExpression=None,
-             dest_retention: RetentionExpression=None,
-             compress: bool=None) -> 'Job':
+             source_retention: RetentionExpression = None,
+             dest_retention: RetentionExpression = None,
+             compress: bool = None) -> 'Job':
         """
         Initializes a new backup job
         :param source_url: Source url string
@@ -799,10 +813,11 @@ class Job:
         return Job(source, dest)
 
     @staticmethod
-    def load(url: parse.SplitResult, raise_errors: bool=True) -> 'Job':
+    def load(url: parse.SplitResult, raise_errors: bool = True) -> 'Job':
         """
         Loads a backup job from an existing backup location (source or destination)
         :param url: Location URL
+        :param raise_errors: just print errors instead of raising exceptions
         :return: Backup job
         """
 
@@ -841,8 +856,8 @@ class Job:
 
         return Job(source, dest)
 
-    def update(self, source_retention: RetentionExpression=None, dest_retention: RetentionExpression=None,
-               compress: bool=None):
+    def update(self, source_retention: RetentionExpression = None, dest_retention: RetentionExpression = None,
+               compress: bool = None):
         """
         Update backup job parameters
         :param source_retention: Source retention
@@ -880,6 +895,29 @@ class Job:
             self.destination.write_configuration(self.source)
 
         _logger.info('updated successfully')
+
+    def purge(self, source_retention: RetentionExpression = None, dest_retention: RetentionExpression = None):
+        """
+        Purge backups/snapshots
+        :param source_retention: Optional source retention override
+        :param dest_retention: Optional destination retention override
+        :return:
+        """
+        _logger.info(self.source)
+        if self.destination:
+            _logger.info(self.destination)
+
+        # Retrieve snapshot names of both source and destination
+        self.source.retrieve_snapshots()
+        if self.destination:
+            self.destination.retrieve_snapshots()
+
+        # Clean out excess backups/snapshots
+        self.source.purge_snapshots(
+            retention=source_retention if source_retention is not None else None)
+        if self.destination:
+            self.destination.purge_snapshots(
+                retention=dest_retention if dest_retention is not None else None)
 
     def run(self):
         """ Performs backup run """
@@ -975,9 +1013,9 @@ class Job:
             self.destination.snapshots.insert(0, Snapshot(new_snapshot_name, None))
 
         # Clean out excess backups/snapshots
-        self.source.cleanup_snapshots()
+        self.source.purge_snapshots()
         if self.destination:
-            self.destination.cleanup_snapshots()
+            self.destination.purge_snapshots()
 
         _logger.info('backup %s created successfully in %s'
                      % (new_snapshot_name,
@@ -1005,7 +1043,7 @@ class Job:
 
             if dst and dst.location_type:
                 try:
-                   dst.retrieve_snapshots()
+                    dst.retrieve_snapshots()
                 except Exception as e:
                     _logger.error(str(e))
 

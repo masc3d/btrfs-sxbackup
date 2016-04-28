@@ -26,6 +26,7 @@ _CMD_INIT = 'init'
 _CMD_UPDATE = 'update'
 _CMD_RUN = 'run'
 _CMD_INFO = 'info'
+_CMD_PURGE = 'purge'
 _CMD_DESTROY = 'destroy'
 _CMD_TRANSFER = 'transfer'
 _CMD_FILES = 'files'
@@ -141,6 +142,12 @@ p_run.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=Non
 p_info = subparsers.add_parser(_CMD_INFO, help='backup job info')
 p_info.add_argument(*subvolumes_args, **subvolumes_kwargs)
 
+# Purge command cmdline params
+p_purge = subparsers.add_parser(_CMD_PURGE, help="purge backups according to retention expressions")
+p_purge.add_argument(*subvolumes_args, **subvolumes_kwargs)
+p_purge.add_argument(*source_retention_args, **source_retention_kwargs)
+p_purge.add_argument(*destination_retention_args, **destination_retention_kwargs)
+
 # Transfer
 p_transfer = subparsers.add_parser(_CMD_TRANSFER, help='transfer snapshot')
 p_transfer.add_argument('source_subvolume', type=str, metavar='source-subvolume',
@@ -245,6 +252,17 @@ try:
             try:
                 job = Job.load(urllib.parse.urlsplit(subvolume), raise_errors=False)
                 job.print_info()
+            except Exception as e:
+                handle_exception(e, email_recipient, log_trace)
+                exitcode = 1
+
+    elif args.command == _CMD_PURGE:
+        source_retention = RetentionExpression(args.source_retention) if args.source_retention else None
+        dest_retention = RetentionExpression(args.destination_retention) if args.destination_retention else None
+        for subvolume in args.subvolumes:
+            try:
+                job = Job.load(urllib.parse.urlsplit(subvolume))
+                job.purge(source_retention=source_retention, dest_retention=dest_retention)
             except Exception as e:
                 handle_exception(e, email_recipient, log_trace)
                 exitcode = 1
