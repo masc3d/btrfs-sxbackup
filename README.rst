@@ -202,6 +202,34 @@ info
     optional arguments:
       -h, --help  show this help message and exit
 
+purge
+-----
+
+.. code ::
+
+    usage: btrfs-sxbackup purge [-h] [-sr SOURCE_RETENTION]
+                                [-dr DESTINATION_RETENTION]
+                                subvolume [subvolume ...]
+
+    positional arguments:
+      subvolume             backup job source or destination subvolume. local path
+                            or SSH url
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -sr SOURCE_RETENTION, --source-retention SOURCE_RETENTION
+                            Optionally override expression defining which source
+                            snapshots to retain/cleanup. can be a static number
+                            (of backups) or more complex expression like "1d:4/d,
+                            1w:daily, 2m:none" literally translating to: "1 day
+                            from now keep 4 backups a day, 1 week from now keep
+                            daily backups, 2 months from now keep none"
+      -dr DESTINATION_RETENTION, --destination-retention DESTINATION_RETENTION
+                            Optionally override expression defining which
+                            destination snapshots to retain/cleanup. can be a
+                            static number (of backups) or more complex expression
+                            (see --source-retention argument)
+
 destroy
 -------
 
@@ -238,6 +266,10 @@ transfer
 Changelog
 =========
 
+0.6.0
+-----
+* ADDED support for purge command
+
 0.5.9
 -----
 * ADDED license headers to all source files, no functional changes
@@ -270,3 +302,4 @@ Changelog
 * Backups created with older versions are still supported.
   If you customized the source container subvolume, this will still work, but it's recommended to rename it
   to the new default (**.sxbackup**) and update source and destination configuration files (.btrfs-sxbackup) accordingly
+
