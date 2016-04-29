@@ -267,6 +267,10 @@ transfer
 Changelog
 =========
 
+0.6.1
+-----
+* README update (non-functional)
+
 0.6.0
 -----
 * ADDED support for purge command
