@@ -269,7 +269,7 @@ Changelog
 
 0.6.1
 -----
-* README update (non-functional)
+* README update
 
 0.6.0
 -----
