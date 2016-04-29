@@ -145,8 +145,12 @@ p_info.add_argument(*subvolumes_args, **subvolumes_kwargs)
 # Purge command cmdline params
 p_purge = subparsers.add_parser(_CMD_PURGE, help="purge backups according to retention expressions")
 p_purge.add_argument(*subvolumes_args, **subvolumes_kwargs)
-p_purge.add_argument(*source_retention_args, **source_retention_kwargs)
-p_purge.add_argument(*destination_retention_args, **destination_retention_kwargs)
+purge_source_retention_kwargs = source_retention_kwargs.copy()
+purge_destination_retention_kwargs = destination_retention_kwargs.copy()
+purge_source_retention_kwargs['help'] = 'Optionally override %s' % purge_source_retention_kwargs['help']
+purge_destination_retention_kwargs['help'] = 'Optionally override %s' % purge_destination_retention_kwargs['help']
+p_purge.add_argument(*source_retention_args, **purge_source_retention_kwargs)
+p_purge.add_argument(*destination_retention_args, **purge_destination_retention_kwargs)
 
 # Transfer
 p_transfer = subparsers.add_parser(_CMD_TRANSFER, help='transfer snapshot')

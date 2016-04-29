@@ -510,7 +510,7 @@ class JobLocation(Location):
     def remove_configuration(self):
         """
         Remove backup job configuration file
-s       """
+        """
         self._log_info('removing configuration')
         self.exec_check_output('rm "%s"' % self.configuration_filename)
 
