@@ -96,6 +96,7 @@ Synopsis and options
         update              update backup job
         run                 run backup job
         info                backup job info
+        purge               purge backups according to retention expressions
         transfer            transfer snapshot
 
     optional arguments:
