@@ -38,7 +38,7 @@ setup(
         'Topic :: Utilities'],
 
     entry_points={
-        'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__']
+        'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__:main']
     }
 )
 
