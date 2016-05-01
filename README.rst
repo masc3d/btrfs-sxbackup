@@ -269,7 +269,7 @@ Changelog
 
 0.6.2
 -----
-FIXED pip installation may fail with bdist/wheel
+* FIXED pip installation may fail with bdist/wheel
 
 0.6.1
 -----
