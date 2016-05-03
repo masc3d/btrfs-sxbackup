@@ -153,7 +153,7 @@ def main():
         :param ex:
         :return:
         """
-        
+
         # Log exception message
         if len(str(ex)) > 0:
             logger.error('%s' % str(ex))

@@ -267,6 +267,10 @@ transfer
 Changelog
 =========
 
+0.6.3
+-----
+* FIXED exception during exception handling in main method
+
 0.6.2
 -----
 * FIXED pip installation may fail with bdist/wheel
