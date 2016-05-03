@@ -33,37 +33,6 @@ _CMD_FILES = 'files'
 _CMD_FILES_NEW = 'new'
 
 
-def handle_exception(ex: Exception, email_recipient: str, log_trace: bool=False):
-    """
-    Exception handler
-    :param ex:
-    :param mail_recipient:
-    :return:
-    """
-    # Log exception message
-    if len(str(ex)) > 0:
-        logger.error('%s' % str(ex))
-
-    if isinstance(ex, CalledProcessError):
-        if ex.output:
-            output = ex.output.decode().strip()
-            if len(output) > 0:
-                logger.error('%s' % output)
-
-    if log_trace:
-        # Log stack trace
-        logger.error(traceback.format_exc())
-
-    # Email notification
-    if email_recipient:
-        try:
-            # Format message and send
-            msg = '\n'.join(map(lambda log_record: log_memory_handler.formatter.format(log_record),
-                                log_memory_handler.buffer))
-            mail.send(email_recipient, '%s FAILED' % _APP_NAME, msg)
-        except Exception as ex:
-            logger.error(str(ex))
-
 def main():
     # Parse arguments
     parser = ArgumentParser(prog=_APP_NAME)
@@ -175,7 +144,39 @@ def main():
         logger.addHandler(log_std_handler)
 
     log_memory_handler = None
+    log_trace = False
     email_recipient = None
+
+    def handle_exception(ex: Exception):
+        """
+        Exception handler
+        :param ex:
+        :return:
+        """
+        
+        # Log exception message
+        if len(str(ex)) > 0:
+            logger.error('%s' % str(ex))
+
+        if isinstance(ex, CalledProcessError):
+            if ex.output:
+                output = ex.output.decode().strip()
+                if len(output) > 0:
+                    logger.error('%s' % output)
+
+        if log_trace:
+            # Log stack trace
+            logger.error(traceback.format_exc())
+
+        # Email notification
+        if email_recipient:
+            try:
+                # Format message and send
+                msg = '\n'.join(map(lambda log_record: log_memory_handler.formatter.format(log_record),
+                                    log_memory_handler.buffer))
+                mail.send(email_recipient, '%s FAILED' % _APP_NAME, msg)
+            except Exception as ex:
+                logger.error(str(ex))
 
     # Syslog handler
     if args.command == _CMD_RUN:
@@ -198,7 +199,6 @@ def main():
             log_memory_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
             logger.addHandler(log_memory_handler)
 
-    log_trace = False
     if args.verbosity and args.verbosity >= 1:
         logger.setLevel(logging.DEBUG)
         log_trace = True
@@ -215,7 +215,7 @@ def main():
                     job = Job.load(urllib.parse.urlsplit(subvolume))
                     job.run()
                 except Exception as e:
-                    handle_exception(e, email_recipient, log_trace)
+                    handle_exception(e)
                     exitcode = 1
 
         elif args.command == _CMD_INIT:
@@ -240,7 +240,7 @@ def main():
                                not args.no_compress if args.no_compress else
                                None)
                 except Exception as e:
-                    handle_exception(e, email_recipient, log_trace)
+                    handle_exception(e)
                     exitcode = 1
 
         elif args.command == _CMD_DESTROY:
@@ -249,7 +249,7 @@ def main():
                     job = Job.load(urllib.parse.urlsplit(subvolume))
                     job.destroy(purge=args.purge)
                 except Exception as e:
-                    handle_exception(e, email_recipient, log_trace)
+                    handle_exception(e)
                     exitcode = 1
 
         elif args.command == _CMD_INFO:
@@ -258,7 +258,7 @@ def main():
                     job = Job.load(urllib.parse.urlsplit(subvolume), raise_errors=False)
                     job.print_info()
                 except Exception as e:
-                    handle_exception(e, email_recipient, log_trace)
+                    handle_exception(e)
                     exitcode = 1
 
         elif args.command == _CMD_PURGE:
@@ -269,7 +269,7 @@ def main():
                     job = Job.load(urllib.parse.urlsplit(subvolume))
                     job.purge(source_retention=source_retention, dest_retention=dest_retention)
                 except Exception as e:
-                    handle_exception(e, email_recipient, log_trace)
+                    handle_exception(e)
                     exitcode = 1
 
         elif args.command == _CMD_TRANSFER:
@@ -285,7 +285,7 @@ def main():
         exitcode = 1
 
     except Exception as e:
-        handle_exception(e, email_recipient, log_trace)
+        handle_exception(e)
         exitcode = 1
 
     exit(exitcode)
