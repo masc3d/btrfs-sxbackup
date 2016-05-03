@@ -32,7 +32,7 @@ Installation
 ============
 .. code ::
 
-    pip3 install --no-binary :all: btrfs-sxbackup
+    pip3 install btrfs-sxbackup
 
 Setup
 =====
