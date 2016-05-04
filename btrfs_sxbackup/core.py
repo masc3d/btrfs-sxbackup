@@ -941,17 +941,24 @@ class Job:
         new_snapshot_name = SnapshotName()
         if len(self.source.snapshots) > 0 \
                 and new_snapshot_name.timestamp <= self.source.snapshots[0].name.timestamp:
-            raise Error('current snapshot name [%s] would be older than newest existing snapshot [%s] \
-                                 which may indicate a system time problem'
+            raise Error(('current snapshot name [%s] would be older than newest existing snapshot [%s] '
+                         'which may indicate a system time problem')
                         % (new_snapshot_name, self.source.snapshots[0].name))
 
         temp_name = self.source.create_temp_name()
 
         # btrfs send command/subprocess
+        source_parent_path = None
         if len(self.source.snapshots) > 0:
-            source_parent_path = os.path.join(self.source.container_subvolume_path, str(self.source.snapshots[0].name))
-        else:
-            source_parent_path = None
+            # Latest source and destination snapshot timestamp has to match for incremental transfer
+            if self.source.snapshots[0].name.timestamp == self.destination.snapshots[0].name.timestamp:
+                source_parent_path = os.path.join(self.source.container_subvolume_path,
+                                                  str(self.source.snapshots[0].name))
+            else:
+                _logger.warn(
+                    ('Latest timestamps of source [%s] and destination [%s] do not match. A full snapshot will '
+                     'be transferred')
+                    % (self.source.snapshots[0].name.timestamp, self.destination.snapshots[0].name.timestamp))
 
         # Create source snapshot
         temp_source_path = self.source.create_snapshot(temp_name)
