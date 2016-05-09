@@ -267,6 +267,10 @@ transfer
 Changelog
 =========
 
+0.6.5
+-----
+* RESOLVED #18, improved error output
+
 0.6.4
 -----
 * ADDED support for falling back to transferring full snapshot if latest snapshot (timestamp) does not match on source/destination
