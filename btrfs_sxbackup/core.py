@@ -138,6 +138,9 @@ class Location:
     def _log_warn(self, msg):
         self.__logger.warn(self._format_log_msg(msg))
 
+    def _log_error(self, msg):
+        self.__logger.error(self._format_log_msg(msg))
+
     def _log_debug(self, msg):
         self.__logger.debug(self._format_log_msg(msg))
 
@@ -294,14 +297,20 @@ class Location:
             # Wait for commands to complete
             send_returncode = send_process.wait()
             receive_returncode = receive_process.wait()
-            if send_returncode:
-                raise subprocess.CalledProcessError(send_process.returncode,
-                                                    send_process.args,
-                                                    send_process.stderr.read())
+
+            def log_process_error(proc_returncode, proc_args, proc_out):
+                proc_out_fmt = proc_out.read().decode().strip()
+                self._log_error('Command %s failed with error code %d (%s)'
+                                % (proc_args, proc_returncode, proc_out_fmt))
+
             if receive_returncode:
-                raise subprocess.CalledProcessError(receive_process.returncode,
-                                                    receive_process.args,
-                                                    receive_process.stdout.read())
+                log_process_error(receive_process.returncode, receive_process.args, receive_process.stdout)
+
+            if send_returncode:
+                log_process_error(send_process.returncode, send_process.args, send_process.stderr)
+
+            if receive_returncode or send_returncode:
+                raise Error("Transferring snapshot failed")
 
         except BaseException as e:
             try:
