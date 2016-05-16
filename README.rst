@@ -27,7 +27,7 @@ Optional
 --------
 * ssh (for remote push/pull, not required for local operation)
    
-   * bash has to be set as the default remote shell for the user running the backup
+  * bash has to be set as the default remote shell for the user running the backup
    
 * lzop (for compression support if desired)
 
