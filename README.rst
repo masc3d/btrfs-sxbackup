@@ -16,6 +16,7 @@ Required
 The following packages have to be available on both source and destination
 
 * bash
+
 * btrfs-progs
 
 The system executing btrfs-backup requires
@@ -25,9 +26,13 @@ The system executing btrfs-backup requires
 Optional
 --------
 * ssh (for remote push/pull, not required for local operation)
+   
    * bash has to be set as the default remote shell for the user running the backup
+   
 * lzop (for compression support if desired)
+
 * pv (provides progress indication if installed)
+
 * sendmail (for email notifications if desired)
 
 Installation
@@ -43,6 +48,7 @@ Setup
 Known limitations
 =================
 * the destination filesystem has to be mounted without the subvol option, otherwise an error will occur on btrfs receive prompting you to remount with fs tree
+
 * some commands (like *update*) may not be available for backup jobs created with older versions of btrfs-sxbackup. in this case backup jobs can be recreated using *destroy* and *init*. existing snapshots will be kept as long as *destroy* is **not** invoked with *--purge*.
 
 Usage examples
@@ -316,12 +322,15 @@ Changelog
 0.5.4
 -----
 * Python 3.3 compatibility fixes
+
 * Added proper support for relative paths passed to init
 
 0.5.0
 -----
 * New command line interface
+
 * Source container subvolume path is now **.sxbackup** relative to the source subvolume and cannot be customized anylonger
+
 * Backups created with older versions are still supported.
   If you customized the source container subvolume, this will still work, but it's recommended to rename it
   to the new default (**.sxbackup**) and update source and destination configuration files (.btrfs-sxbackup) accordingly
