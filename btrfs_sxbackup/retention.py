@@ -61,9 +61,10 @@ class RetentionExpression:
                 'd': timedelta(days=1),
                 'w': timedelta(days=7),
                 'm': timedelta(days=30),
+                'y': timedelta(days=365),
                 'n': None}
 
-        __retain_re = re.compile('^([0-9]+)(/([hdwm]))?$', re.IGNORECASE)
+        __retain_re = re.compile('^([0-9]+)(/([0-9]+)?([hdwm]))?$', re.IGNORECASE)
         __age_re = re.compile('^([0-9]+)([hdwm])?$', re.IGNORECASE)
 
         def __init__(self, age: timedelta, interval_duration: timedelta, interval_amount: int, text: str):
@@ -109,10 +110,16 @@ class RetentionExpression:
                     if match is None:
                         raise ValueError('Invalid retention [%s]' % retain_literal)
                     interval_amount = int(match.group(1))
-                    if match.group(3) is None:
+
+                    if match.group(3) is None and match.group(4) is None:
                         interval_duration = None
                     else:
-                        interval_duration = RetentionExpression.Condition.__kd[str(match.group(3)[0])]
+                        if match.group(3) is not None:
+                            interval_mult = int(match.group(3))
+                        else:
+                            interval_mult = 1
+
+                        interval_duration = interval_mult * RetentionExpression.Condition.__kd[str(match.group(4)[0])]
 
             return RetentionExpression.Condition(age=age,
                                                  interval_duration=interval_duration,
