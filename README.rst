@@ -15,6 +15,7 @@ Required
 --------
 The following packages have to be available on both source and destination
 
+* bash
 * btrfs-progs
 
 The system executing btrfs-backup requires
@@ -24,6 +25,7 @@ The system executing btrfs-backup requires
 Optional
 --------
 * ssh (for remote push/pull, not required for local operation)
+   * bash has to be set as the default remote shell for the user running the backup
 * lzop (for compression support if desired)
 * pv (provides progress indication if installed)
 * sendmail (for email notifications if desired)
