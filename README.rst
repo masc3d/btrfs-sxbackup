@@ -275,6 +275,10 @@ transfer
 Changelog
 =========
 
+0.6.6
+-----
+* ADDED support for retain timespan multiplier (eg. '1/4m' -> keep 1 in 4 months) and yearly timespan literal ('y'), resolving #28
+
 0.6.5
 -----
 * RESOLVED #18, improved error output
