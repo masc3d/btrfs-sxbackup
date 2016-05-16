@@ -64,8 +64,8 @@ class RetentionExpression:
                 'y': timedelta(days=365),
                 'n': None}
 
-        __retain_re = re.compile('^([0-9]+)(/([0-9]+)?([hdwm]))?$', re.IGNORECASE)
-        __age_re = re.compile('^([0-9]+)([hdwm])?$', re.IGNORECASE)
+        __retain_re = re.compile('^([0-9]+)(/([0-9]+)?([hdwmy]))?$', re.IGNORECASE)
+        __age_re = re.compile('^([0-9]+)([hdwmy])?$', re.IGNORECASE)
 
         def __init__(self, age: timedelta, interval_duration: timedelta, interval_amount: int, text: str):
             self.__text = text
