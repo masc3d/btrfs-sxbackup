@@ -275,6 +275,11 @@ transfer
 Changelog
 =========
 
+0.6.7
+-----
+* FIXED #30: full snapshot warning breaks local jobs (having no destination)
+* RESOLVED #29: can't destroy when destination unavailable
+
 0.6.6
 -----
 * ADDED support for retain timespan multiplier (eg. '1/4m' -> keep 1 in 4 months) and yearly timespan literal ('y'), resolving #28
