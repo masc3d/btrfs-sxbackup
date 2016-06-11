@@ -548,25 +548,32 @@ class JobLocation(Location):
                                   str(c), ', '.join(list(map(lambda x: str(x), to_remove)))))
                 self.remove_snapshots(list(map(lambda x: str(x), to_remove)))
 
-    def destroy(self, purge=False):
+    def destroy(self, purge=False, raise_errors=True):
         """
         Destroy this backup location.
         Removes configuration file and (optionally) all snapshots
         :param purge: Purgs all snapshots in addition
+        :param raise_errors: Raise errors or merely log them
         """
-        self.retrieve_snapshots()
+        try:
+            self.retrieve_snapshots()
 
-        if purge:
-            self._log_info('purging all snapshots')
-            self.remove_snapshots(list(map(lambda x: str(x.name), self.snapshots)))
-            self.snapshots.clear()
+            if purge:
+                self._log_info('purging all snapshots')
+                self.remove_snapshots(list(map(lambda x: str(x.name), self.snapshots)))
+                self.snapshots.clear()
 
-        self.remove_configuration()
+            self.remove_configuration()
 
-        if (len(self.snapshots) == 0 and
-                    self.location_type == JobLocation.TYPE_SOURCE and
-                self.container_subvolume_relpath):
-            self.remove_btrfs_subvolume(self.container_subvolume_path)
+            if (len(self.snapshots) == 0 and
+                        self.location_type == JobLocation.TYPE_SOURCE and
+                    self.container_subvolume_relpath):
+                self.remove_btrfs_subvolume(self.container_subvolume_path)
+        except Exception as ex:
+            if raise_errors:
+                raise ex
+            else:
+                self._log_error(str(ex))
 
     def write_configuration(self, corresponding_location: 'JobLocation'):
         """ Write configuration file to container subvolume 
@@ -1043,9 +1050,10 @@ class Job:
         Destroys both source and destination
         :param purge: Purge all snapshots
         """
-        self.source.destroy(purge=purge)
+        self.source.destroy(purge=purge, raise_errors=False)
+
         if self.destination:
-            self.destination.destroy(purge=purge)
+            self.destination.destroy(purge=purge, raise_errors=False)
 
     def print_info(self, include_snapshots=True):
         src = self.source
