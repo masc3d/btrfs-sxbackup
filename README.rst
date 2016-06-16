@@ -275,6 +275,10 @@ transfer
 Changelog
 =========
 
+0.6.8
+-----
+* RESOLVED #31 Error when destination has no snapshots
+
 0.6.7
 -----
 * FIXED #30: full snapshot warning breaks local jobs (having no destination)

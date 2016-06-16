@@ -967,12 +967,16 @@ class Job:
         source_parent_path = None
         if len(self.source.snapshots) > 0:
             # Latest source and destination snapshot timestamp has to match for incremental transfer
-            if self.destination is not None \
-                    and self.source.snapshots[0].name.timestamp != self.destination.snapshots[0].name.timestamp:
-                _logger.warn(
-                    ('Latest timestamps of source [%s] and destination [%s] do not match. A full snapshot will '
-                     'be transferred')
-                    % (self.source.snapshots[0].name.timestamp, self.destination.snapshots[0].name.timestamp))
+            if self.destination is not None:
+                if len(self.destination.snapshots) > 0:
+                    if self.source.snapshots[0].name.timestamp != self.destination.snapshots[0].name.timestamp:
+                        _logger.warn(
+                            ('Latest timestamps of source [%s] and destination [%s] do not match. A full snapshot will '
+                             'be transferred')
+                            % (self.source.snapshots[0].name.timestamp, self.destination.snapshots[0].name.timestamp))
+                else:
+                    _logger.warn('Destination has no snapshots, a full snapshot will be transferred')
+
             else:
                 source_parent_path = os.path.join(self.source.container_subvolume_path,
                                                   str(self.source.snapshots[0].name))
