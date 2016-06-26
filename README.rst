@@ -275,6 +275,10 @@ transfer
 Changelog
 =========
 
+0.6.9
+-----
+* RESOLVED #32 regression, always transferring full snapshots
+
 0.6.8
 -----
 * RESOLVED #31 Error when destination has no snapshots
