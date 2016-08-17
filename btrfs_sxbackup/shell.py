@@ -24,9 +24,15 @@ def build_subprocess_args(cmd, url=None):
     cmd = cmd if isinstance(cmd, list) else [cmd]
     # wrap into bash or ssh command respectively
     # depending if command is executed locally (host==None) or remotely
-    subprocess_args = ['bash', '-c'] + cmd if url is None or url.hostname is None else \
-        ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s'
-         % (url.username, url.hostname)] + cmd
+
+    if url is None or url.hostname is None:
+        subprocess_args = ['bash', '-c'] + cmd
+    elif url.username is None:
+        subprocess_args = ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s'
+        % (url.hostname)] + cmd
+    else:
+        subprocess_args = ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3', '%s@%s'
+        % (url.username, url.hostname)] + cmd
 
     _logger.debug(subprocess_args)
 
