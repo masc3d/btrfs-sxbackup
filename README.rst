@@ -275,6 +275,10 @@ transfer
 Changelog
 =========
 
+0.6.10
+------
+* FIXED username should be checked for `None` when building ssh url
+
 0.6.9
 -----
 * RESOLVED #32 regression, always transferring full snapshots
