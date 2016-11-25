@@ -6,11 +6,21 @@
 # any later version.
 
 import sys
+import glob
+import os
+import subprocess
 
 from setuptools import setup
 
 from btrfs_sxbackup import __version__
 
+from setuptools.command.sdist import sdist
+
+class make_man(sdist):
+
+    def run(self):
+        os.chdir("./docs")
+        subprocess.run(["make", "man"])
 
 if sys.version_info.major < 3:
     print('btrfs-sxbackup requires python v3.x')
@@ -26,6 +36,7 @@ setup(
     packages=['btrfs_sxbackup'],
     description='Incremental btrfs snapshot backups with push/pull support via SSH',
     long_description=open('README.rst').read(),
+    data_files=[("/usr/local/share/man/man1/", glob.glob("docs/_build/man/*.1"))],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',
@@ -39,6 +50,7 @@ setup(
 
     entry_points={
         'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__:main']
-    }
+    },
+    cmdclass={'build_man': make_man}
 )
 
