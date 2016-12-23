@@ -21,6 +21,8 @@ class make_man(sdist):
     def run(self):
         os.chdir("./docs")
         subprocess.run(["make", "man"])
+        os.chdir("..")
+        sdist.run(self)
 
 if sys.version_info.major < 3:
     print('btrfs-sxbackup requires python v3.x')
@@ -51,6 +53,6 @@ setup(
     entry_points={
         'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__:main']
     },
-    cmdclass={'build_man': make_man}
+    cmdclass={'sdist': make_man}
 )
 
