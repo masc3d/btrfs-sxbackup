@@ -36,9 +36,10 @@ setup(
     license='GNU GPL',
     url='https://github.com/masc3d/btrfs-sxbackup',
     packages=['btrfs_sxbackup'],
+    extras_require={'docs' : ['sphinx', 'shpinxcontrib-autprogram']},
     description='Incremental btrfs snapshot backups with push/pull support via SSH',
     long_description=open('README.rst').read(),
-    data_files=[("/usr/local/share/man/man1/", glob.glob("docs/_build/man/*.1"))],
+    data_files=[("man/man1/", glob.glob("docs/_build/man/*.1"))],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',
