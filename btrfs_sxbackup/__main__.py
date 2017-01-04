@@ -107,6 +107,10 @@ def main():
                             ' default email-recipient setting in /etc/btrfs-sxbackup.conf')
     p_run.add_argument('-li', '--log-ident', dest='log_ident', type=str, default=None,
                        help='log ident used for syslog logging, defaults to script name')
+    p_run_touch = p_run.add_mutually_exclusive_group(required=False)
+    p_run_touch.add_argument('--touch-source', dest='touch_source', action='store_true', help='touch source volume root before creating the snapshot to update its mtime. This is the default since version 0.5.9.')
+    p_run_touch.add_argument('--no-touch-source', dest='touch_source', action='store_false', help='do not touch source volume root.')
+    p_run.set_defaults(touch_source=True)
 
     # Info command cmdline params
     p_info = subparsers.add_parser(_CMD_INFO, help='backup job info')
@@ -213,7 +217,7 @@ def main():
             for subvolume in args.subvolumes:
                 try:
                     job = Job.load(urllib.parse.urlsplit(subvolume))
-                    job.run()
+                    job.run(args.touch_source)
                 except Exception as e:
                     handle_exception(e)
                     exitcode = 1
@@ -291,4 +295,3 @@ def main():
     exit(exitcode)
 
 main()
-

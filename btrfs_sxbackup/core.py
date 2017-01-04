@@ -490,13 +490,14 @@ class JobLocation(Location):
         self.__snapshots = sorted(snapshots, key=lambda s: s.name.timestamp, reverse=True)
         return self.__snapshots
 
-    def create_snapshot(self, name):
+    def create_snapshot(self, name, touch_source: True):
         """
         Creates a new snapshot within container subvolume
         :param name: Name of snapshot
         """
         # Touch source volume root, updating its mtime
-        self.touch(self.url.path)
+        if touch_source:
+            self.touch(self.url.path)
 
         # Create new temporary snapshot (source)
         dest_path = os.path.join(self.container_subvolume_path, name)
@@ -576,7 +577,7 @@ class JobLocation(Location):
                 self._log_error(str(ex))
 
     def write_configuration(self, corresponding_location: 'JobLocation'):
-        """ Write configuration file to container subvolume 
+        """ Write configuration file to container subvolume
         :type corresponding_location: JobLocation
         """
         if not self.location_type:
@@ -935,7 +936,7 @@ class Job:
             self.destination.purge_snapshots(
                 retention=dest_retention if dest_retention is not None else None)
 
-    def run(self):
+    def run(self, touch_source: True):
         """ Performs backup run """
         starting_time = time.monotonic()
 
@@ -991,7 +992,7 @@ class Job:
                                                   str(self.source.snapshots[0].name))
 
         # Create source snapshot
-        temp_source_path = self.source.create_snapshot(temp_name)
+        temp_source_path = self.source.create_snapshot(temp_name, touch_source)
 
         # Recovery handler, swallows all exceptions and logs them
         def recover(l, warn_msg: str):
