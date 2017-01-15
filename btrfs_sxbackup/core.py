@@ -218,8 +218,18 @@ class Location:
 
         # Create new temporary snapshot (source)
         self._log_info('creating snapshot')
-        self.exec_check_output('btrfs sub snap -r "%s" "%s" && sync'
+        self.exec_check_output('btrfs sub snap "%s" "%s" && sync'
                                % (source_path, dest_path))
+
+        # Touch source volume root, updating its mtime
+        self.touch(dest_path)
+
+        # Set snapshot to readonly
+        self.update_btrfs_property(dest_path, 'ro', 'true')
+
+    def update_btrfs_property(self, path: str, property: str, value: str):
+        self._log_debug('updating property [%s] of [%s] to [%s]' % (property, path, value))
+        self.exec_check_output('btrfs property set "%s" %s %s' % (path, property, value))
 
     def transfer_btrfs_snapshot(self,
                                 dest: 'Location',
@@ -495,9 +505,6 @@ class JobLocation(Location):
         Creates a new snapshot within container subvolume
         :param name: Name of snapshot
         """
-        # Touch source volume root, updating its mtime
-        self.touch(self.url.path)
-
         # Create new temporary snapshot (source)
         dest_path = os.path.join(self.container_subvolume_path, name)
         self.create_btrfs_snapshot(self.url.path, dest_path)
