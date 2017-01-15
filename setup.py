@@ -9,18 +9,21 @@ import sys
 import glob
 import os
 import subprocess
-
+import sphinx
 from setuptools import setup
+from setuptools.command.sdist import sdist
 
 from btrfs_sxbackup import __version__
 
-from setuptools.command.sdist import sdist
 
 class make_man(sdist):
 
     def run(self):
         os.chdir("./docs")
-        subprocess.run(["make", "man"])
+        sys.path.append(".")
+        import btrfs_sxbackup_make_doc
+        btrfs_sxbackup_make_doc.main()
+        sphinx.main(["sphinx-build", "-b", "man", "-T", "-d", "_build/doctrees", ".", "_build/man"])
         os.chdir("..")
         sdist.run(self)
 

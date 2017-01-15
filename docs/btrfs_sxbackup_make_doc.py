@@ -97,6 +97,7 @@ def make_pages(parser, prog_name, destination_dir):
 import btrfs_sxbackup.cli
 
 def main(out_dir="./man_pages"):
+    os.makedirs(out_dir, exist_ok=True)
     make_pages(btrfs_sxbackup.cli.parser, "btrfs_sxbackup", out_dir)
 
 def clean():
