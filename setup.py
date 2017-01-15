@@ -6,11 +6,26 @@
 # any later version.
 
 import sys
-
+import glob
+import os
+import subprocess
+import sphinx
 from setuptools import setup
+from setuptools.command.sdist import sdist
 
 from btrfs_sxbackup import __version__
 
+
+class make_man(sdist):
+
+    def run(self):
+        os.chdir("./docs")
+        sys.path.append(".")
+        import btrfs_sxbackup_make_doc
+        btrfs_sxbackup_make_doc.main()
+        sphinx.main(["sphinx-build", "-b", "man", "-T", "-d", "_build/doctrees", ".", "_build/man"])
+        os.chdir("..")
+        sdist.run(self)
 
 if sys.version_info.major < 3:
     print('btrfs-sxbackup requires python v3.x')
@@ -24,8 +39,10 @@ setup(
     license='GNU GPL',
     url='https://github.com/masc3d/btrfs-sxbackup',
     packages=['btrfs_sxbackup'],
+    extras_require={'docs' : ['sphinx', 'shpinxcontrib-autprogram']},
     description='Incremental btrfs snapshot backups with push/pull support via SSH',
     long_description=open('README.rst').read(),
+    data_files=[("man/man1/", glob.glob("docs/_build/man/*.1"))],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',
@@ -39,6 +56,7 @@ setup(
 
     entry_points={
         'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__:main']
-    }
+    },
+    cmdclass={'sdist': make_man}
 )
 

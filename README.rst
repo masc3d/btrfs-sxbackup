@@ -1,5 +1,5 @@
 btrfs-sxbackup
-**************
+##############
 
 Btrfs snapshot backup utility
 
@@ -11,8 +11,10 @@ Btrfs snapshot backup utility
 
 System dependencies
 ===================
+
 Required
 --------
+
 The following packages have to be available on both source and destination
 
 * bash
@@ -25,6 +27,7 @@ The system executing btrfs-backup requires
 
 Optional
 --------
+
 * ssh (for remote push/pull, not required for local operation)
    
   * bash has to be set as the default remote shell for the user running the backup
@@ -37,16 +40,19 @@ Optional
 
 Installation
 ============
+
 .. code ::
 
     pip3 install btrfs-sxbackup
 
 Setup
 =====
+
 * when using ssh, public/private key authentication should be set up
 
 Known limitations
 =================
+
 * the destination filesystem has to be mounted without the subvol option, otherwise an error will occur on btrfs receive prompting you to remount with fs tree
 
 * some commands (like *update*) may not be available for backup jobs created with older versions of btrfs-sxbackup. in this case backup jobs can be recreated using *destroy* and *init*. existing snapshots will be kept as long as *destroy* is **not** invoked with *--purge*.
@@ -271,88 +277,3 @@ transfer
       -h, --help            show this help message and exit
       -c, --compress        enables compression during transmission. Requires lzop
                             to be installed on both source and destination
-
-Changelog
-=========
-
-0.6.10
-------
-* FIXED username should be checked for `None` when building ssh url
-
-0.6.9
------
-* RESOLVED #32 regression, always transferring full snapshots
-
-0.6.8
------
-* RESOLVED #31 Error when destination has no snapshots
-
-0.6.7
------
-* FIXED #30: full snapshot warning breaks local jobs (having no destination)
-* RESOLVED #29: can't destroy when destination unavailable
-
-0.6.6
------
-* ADDED support for retain timespan multiplier (eg. '1/4m' -> keep 1 in 4 months) and yearly timespan literal ('y'), resolving #28
-
-0.6.5
------
-* RESOLVED #18, improved error output
-
-0.6.4
------
-* ADDED support for falling back to transferring full snapshot if latest snapshot (timestamp) does not match on source/destination
-
-0.6.3
------
-* FIXED exception during exception handling in main method
-
-0.6.2
------
-* FIXED pip installation may fail with bdist/wheel
-
-0.6.1
------
-* README update
-
-0.6.0
------
-* ADDED support for purge command
-
-0.5.9
------
-* ADDED license headers to all source files, no functional changes
-
-0.5.8
------
-* FIXED job won't run due to inconsistent  datetime comparison (offset-naive/aware)
-
-0.5.7
------
-* ADDED local timestamps to info, resolving #14
-
-0.5.6
------
-* Fixed #13 "update" command always activates compression, regardless of -c
-
-0.5.5
------
-* Fixed retention breakage which could occur when first/earliest expression kept 1 backup per interval
-
-0.5.4
------
-* Python 3.3 compatibility fixes
-
-* Added proper support for relative paths passed to init
-
-0.5.0
------
-* New command line interface
-
-* Source container subvolume path is now **.sxbackup** relative to the source subvolume and cannot be customized anylonger
-
-* Backups created with older versions are still supported.
-  If you customized the source container subvolume, this will still work, but it's recommended to rename it
-  to the new default (**.sxbackup**) and update source and destination configuration files (.btrfs-sxbackup) accordingly
-
