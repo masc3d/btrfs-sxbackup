@@ -4,5 +4,5 @@ __pycache__
 *.pyc
 dist
 build
-docs/_build
-docs/man_pages
+docs/man
+docs/sphinx/generated
