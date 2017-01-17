@@ -21,27 +21,31 @@ from btrfs_sxbackup import __version__
 class CustomSdist(sdist):
     """ Custom setuptools sdist command class """
     def run(self):
-        doctree_dir = './build/doctrees'
-        output_dir = './build/man'
+        input_dir = './docs/sphinx'
+        build_doctree_dir = './build/doctrees'
+        build_output_dir = './build/man'
+        output_dir = './docs/man'
 
-        if os.path.exists(doctree_dir):
-            shutil.rmtree(doctree_dir)
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
+        if os.path.exists(build_doctree_dir):
+            shutil.rmtree(build_doctree_dir)
+        if os.path.exists(build_output_dir):
+            shutil.rmtree(build_output_dir)
 
         # sphinx doc generation
         sphinx.build_main(['sphinx-build',
-                           '-c', './docs/sphinx',
+                           '-c', input_dir,
                            '-b', 'man',
                            '-T',
-                           '-d', doctree_dir,
+                           '-d', build_doctree_dir,
                            # input dir
-                           './docs/sphinx',
+                           input_dir,
                            # output dir
-                           output_dir])
+                           build_output_dir])
 
-        # move to docs folder
-        shutil.copytree(output_dir, './docs/man')
+        # copy to docs folder
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+        shutil.copytree(build_output_dir, output_dir)
 
         # actual sdist
         sdist.run(self)
