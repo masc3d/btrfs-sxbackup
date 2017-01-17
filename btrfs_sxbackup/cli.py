@@ -5,7 +5,6 @@
 # Software Foundation; either version 2 of the License, or (at your option)
 # any later version.
 
-from argparse import ArgumentParser
 import logging
 import logging.handlers
 import sys

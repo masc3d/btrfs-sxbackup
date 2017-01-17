@@ -1,3 +1,5 @@
+#!/usr/bin/python3.4
+
 # Copyright (c) 2014 Marco Schindler
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -8,23 +10,29 @@
 import sys
 import glob
 import os
+
 import subprocess
 import sphinx
 from setuptools import setup
 from setuptools.command.sdist import sdist
 
+from btrfs_sxbackup import shell
+from btrfs_sxbackup import __version__
+from btrfs_sxbackup import cli
 from btrfs_sxbackup import __version__
 
 
 class make_man(sdist):
 
     def run(self):
+        print('meh')
         os.chdir("./docs")
         sys.path.append(".")
         import btrfs_sxbackup_make_doc
         btrfs_sxbackup_make_doc.main()
-        sphinx.main(["sphinx-build", "-b", "man", "-T", "-d", "_build/doctrees", ".", "_build/man"])
+        sphinx.build_main(["sphinx-build", "-b", "man", "-T", "-d", "_build/doctrees", ".", "_build/man"])
         os.chdir("..")
+        print('meh')
         sdist.run(self)
 
 if sys.version_info.major < 3:
@@ -59,4 +67,3 @@ setup(
     },
     cmdclass={'sdist': make_man}
 )
-

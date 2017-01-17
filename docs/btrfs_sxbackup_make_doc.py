@@ -4,6 +4,7 @@
 # under the terms of the GNU General Public License as published by the Free
 # Software Foundation; either version 2 of the License, or (at your option)
 # any later version.
+
 import argparse
 import os.path
 import os
@@ -11,10 +12,10 @@ import sys
 import jinja2
 import glob
 
-sys.path.append("..")
+sys.path.insert(0, os.path.abspath(".."))
 
-
-from btrfs_sxbackup.cli import parser
+import btrfs_sxbackup
+import btrfs_sxbackup.cli
 
 DESTINATION_DIR = "./man_pages"
 
@@ -52,11 +53,13 @@ See also
 {%- endif -%}
 """
 
+
 def get_subparsers(parser):
     """Get subparsers with depth one"""
     for action in parser._actions:
         if isinstance(action, argparse._SubParsersAction):
             yield action
+
 
 def make_rts(target_path, j2_template, template_arguments):
     """Render j2_template into target_path with template_arguments
@@ -68,6 +71,7 @@ def make_rts(target_path, j2_template, template_arguments):
     template_arguments["len"] = len
     with open(target_path, mode="w") as f:
         f.write(j2_template.render(**template_arguments))
+
 
 def make_pages(parser, prog_name, destination_dir):
     name = str(prog_name)
@@ -82,7 +86,7 @@ def make_pages(parser, prog_name, destination_dir):
                     "command": choice,
                     "description": "",
                     "see_also": [prog_name]
-                    }
+            }
             make_rts(os.path.join(destination_dir, choice+".rst"), j2_template, template_arguments)
 
     see_also = [name.replace("_", "-") + "-" + page for page in subpages]
@@ -91,14 +95,18 @@ def make_pages(parser, prog_name, destination_dir):
             "command": "",
             "description": "",
             "see_also": see_also
-            }
-    make_rts(os.path.join(destination_dir, name+".rst"), j2_template, template_arguments)
+    }
 
-import btrfs_sxbackup.cli
+    make_rts(
+        os.path.join(destination_dir, name+".rst"),
+        j2_template,
+        template_arguments)
 
-def main(out_dir="./man_pages"):
+
+def main(out_dir=DESTINATION_DIR):
     os.makedirs(out_dir, exist_ok=True)
     make_pages(btrfs_sxbackup.cli.parser, "btrfs_sxbackup", out_dir)
+
 
 def clean():
     for f in glob.glob(os.path.join(DESTINATION_DIR, "*.rst")):

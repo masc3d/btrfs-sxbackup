@@ -3,3 +3,6 @@ __pycache__
 *.egg-info
 *.pyc
 dist
+build
+docs/_build
+docs/man_pages
