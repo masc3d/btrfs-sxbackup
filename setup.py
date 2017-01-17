@@ -10,30 +10,42 @@
 import sys
 import glob
 import os
-
-import subprocess
 import sphinx
+import shutil
 from setuptools import setup
 from setuptools.command.sdist import sdist
 
-from btrfs_sxbackup import shell
-from btrfs_sxbackup import __version__
-from btrfs_sxbackup import cli
 from btrfs_sxbackup import __version__
 
 
-class make_man(sdist):
-
+class CustomSdist(sdist):
+    """ Custom setuptools sdist command class """
     def run(self):
-        print('meh')
-        os.chdir("./docs")
-        sys.path.append(".")
-        import btrfs_sxbackup_make_doc
-        btrfs_sxbackup_make_doc.main()
-        sphinx.build_main(["sphinx-build", "-b", "man", "-T", "-d", "_build/doctrees", ".", "_build/man"])
-        os.chdir("..")
-        print('meh')
+        doctree_dir = './build/doctrees'
+        output_dir = './build/man'
+
+        if os.path.exists(doctree_dir):
+            shutil.rmtree(doctree_dir)
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+
+        # sphinx doc generation
+        sphinx.build_main(['sphinx-build',
+                           '-c', './docs/sphinx',
+                           '-b', 'man',
+                           '-T',
+                           '-d', doctree_dir,
+                           # input dir
+                           './docs/sphinx',
+                           # output dir
+                           output_dir])
+
+        # move to docs folder
+        shutil.copytree(output_dir, './docs/man')
+
+        # actual sdist
         sdist.run(self)
+
 
 if sys.version_info.major < 3:
     print('btrfs-sxbackup requires python v3.x')
@@ -47,10 +59,9 @@ setup(
     license='GNU GPL',
     url='https://github.com/masc3d/btrfs-sxbackup',
     packages=['btrfs_sxbackup'],
-    extras_require={'docs' : ['sphinx', 'shpinxcontrib-autprogram']},
     description='Incremental btrfs snapshot backups with push/pull support via SSH',
     long_description=open('README.rst').read(),
-    data_files=[("man/man1/", glob.glob("docs/_build/man/*.1"))],
+    data_files=[("man/man1/", glob.glob("docs/build/man/*.1"))],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',
@@ -65,5 +76,7 @@ setup(
     entry_points={
         'console_scripts': ['btrfs-sxbackup = btrfs_sxbackup.__main__:main']
     },
-    cmdclass={'sdist': make_man}
+    cmdclass={
+        'sdist': CustomSdist
+    }
 )

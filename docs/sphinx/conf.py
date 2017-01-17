@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os
-import os.path
-import sys
 import datetime
-import glob
 
-sys.path.insert(0, os.path.abspath('..'))
-
-import btrfs_sxbackup
+import btrfs_sxbackup.cli
+from btrfs_sxbackup_setup.docgen import Generator
 
 # -- General configuration ------------------------------------------------
 
@@ -49,7 +44,7 @@ release = btrfs_sxbackup.__version__
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
@@ -66,17 +61,8 @@ todo_include_todos = False
 #
 html_theme = 'alabaster'
 
-
 # -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-]
-
-
-for path in glob.glob("man_pages/*.rst"):
-    short = os.path.basename(path).split(".")[0]
-    man_pages.append(("man_pages/" + short, 
-        ("btrfs-sxbackup-"+short if short != "btrfs_sxbackup" else short).replace("_", "-"),
-        short, [author], 1))
+man_pages = Generator().run(out_dir='generated/man')

@@ -13,10 +13,8 @@ Contents:
 .. toctree::
    :maxdepth: 1
 
-   CHANGELOG
-
-.. include:: ../README.rst
-
+.. include:: ../../README.rst
+.. include:: ../../CHANGELOG.rst
 
 
 Indices and tables
