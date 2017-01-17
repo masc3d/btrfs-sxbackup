@@ -18,13 +18,15 @@ from setuptools.command.sdist import sdist
 from btrfs_sxbackup import __version__
 
 
+DOC_MAN_PATH = './docs/man'
+
 class CustomSdist(sdist):
     """ Custom setuptools sdist command class """
     def run(self):
         input_dir = './docs/sphinx'
         build_doctree_dir = './build/doctrees'
         build_output_dir = './build/man'
-        output_dir = './docs/man'
+        output_dir = DOC_MAN_PATH
 
         if os.path.exists(build_doctree_dir):
             shutil.rmtree(build_doctree_dir)
@@ -65,7 +67,7 @@ setup(
     packages=['btrfs_sxbackup'],
     description='Incremental btrfs snapshot backups with push/pull support via SSH',
     long_description=open('README.rst').read(),
-    data_files=[("man/man1/", glob.glob("docs/build/man/*.1"))],
+    data_files=[("man/man1/", glob.glob(os.path.join(DOC_MAN_PATH, '*.1')))],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: End Users/Desktop',
