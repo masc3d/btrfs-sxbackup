@@ -255,10 +255,12 @@ class Location:
         self._log_info('transferring snapshot')
 
         # btrfs send command/subprocess
+        ionice_command_str = 'ionice -c3'
+        send_command_str = ionice_command_str
         if source_parent_path:
-            send_command_str = 'btrfs send -p "%s" "%s"' % (source_parent_path, source_path)
+            send_command_str += ' btrfs send -p "%s" "%s"' % (source_parent_path, source_path)
         else:
-            send_command_str = 'btrfs send "%s"' % source_path
+            send_command_str += ' btrfs send "%s"' % source_path
 
         if compress:
             send_command_str += ' | lzop -1'
@@ -274,7 +276,7 @@ class Location:
                 pv_process = subprocess.Popen(['pv'], stdin=send_process.stdout, stdout=subprocess.PIPE)
 
             # btrfs receive command/subprocess
-            receive_command_str = 'btrfs receive "%s"' % dest_path
+            receive_command_str = ionice_command_str + ' btrfs receive "%s"' % dest_path
             if compress:
                 receive_command_str = 'lzop -d | ' + receive_command_str
 
