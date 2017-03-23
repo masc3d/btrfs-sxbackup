@@ -275,6 +275,10 @@ transfer
 Changelog
 =========
 
+0.6.11
+------
+* btrfs send/receive should run with idle io prio
+
 0.6.10
 ------
 * FIXED username should be checked for `None` when building ssh url
