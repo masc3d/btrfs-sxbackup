@@ -100,7 +100,11 @@ See also
             template_arguments=template_arguments)
 
     def run(self, out_dir: str) -> [str]:
-        shutil.rmtree(out_dir)
+        try:
+            shutil.rmtree(out_dir)
+        except FileNotFoundError:
+            # out_dir does not exist, ignore
+            pass
         os.makedirs(out_dir, exist_ok=True)
 
         self._make_pages(btrfs_sxbackup.cli.parser, "btrfs_sxbackup", out_dir)
