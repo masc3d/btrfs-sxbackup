@@ -1,0 +1,27 @@
+.TH "btrfs-sxbackup-transfer" "1" "0.5.9" "Marco Schindler" ""
+.SH "NAME"
+.LP 
+btrfs\-sxbackup\-transfer \- Transfer a backup snapshot
+.SH "SYNOPSIS"
+.LP 
+\fBbtrfs\-sxbackup transfer\fR [\-h] [\-c] <source_subvolume> <destination_subvolume>
+.SH "DESCRIPTION"
+.LP 
+Transfer a \fBbtrfs\-sxbackup\fR snapshot.
+.SH "OPTIONS"
+.LP 
+.TP 
+\fB<source_subvolume>\fR
+source subvolume to backup. local path or ssh url
+.TP 
+\fB<destination_subvolume>\fR
+destination subvolume receiving backup snapshots. local path or ssh url
+.TP 
+\fB\-h\fR, \fB\-\-help\fR
+show help message and exit
+.TP 
+\fB\-c\fR, \fB\-\-compress\fR
+enables compression during transmission. Requires lzop to be installed on both source and destination
+.SH "SEE ALSO"
+.LP 
+btrfs\-sxbackup(1)
