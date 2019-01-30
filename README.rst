@@ -67,13 +67,15 @@ Initialize a backup job pulling snapshots of subvolume **/** on remote host **my
 
 .. code ::
 
-    btrfs-sxbackup init ssh://root@myhost.org:/ /backup/myhost
+    btrfs-sxbackup init ssh://root@myhost.org:port/ /backup/myhost
 
 Initialize a backup job pushing snapshots of local subvolume **/** to remote subvolume **/backup/myhost** on host **mybackupserver.org**
 
 .. code ::
 
-    btrfs-sxbackup init / ssh://root@mybackupserver.org:/backup/myhost
+    btrfs-sxbackup init / ssh://root@mybackupserver.org:port/backup/myhost
+    
+note that in the ssh:// URL, the username and port part are optional; if not specified, the defaults will be used.
 
 Run
 ---
