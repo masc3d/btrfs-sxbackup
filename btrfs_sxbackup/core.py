@@ -212,7 +212,7 @@ class Location:
         self._log_info('removing subvolume [%s]' % subvolume_path)
         self.exec_check_output('if [ -d "%s" ]; then btrfs sub del "%s"; fi' % (subvolume_path, subvolume_path))
 
-    def create_btrfs_snapshot(self, source_path, dest_path):
+    def create_btrfs_snapshot(self, source_path, dest_path, set_ro=True):
         source_path = self.build_path(source_path)
         dest_path = self.build_path(dest_path)
 
@@ -225,7 +225,8 @@ class Location:
         self.touch(dest_path)
 
         # Set snapshot to readonly
-        self.update_btrfs_property(dest_path, 'ro', 'true')
+        if set_ro:
+            self.update_btrfs_property(dest_path, 'ro', 'true')
 
     def update_btrfs_property(self, path: str, property: str, value: str):
         self._log_debug('updating property [%s] of [%s] to [%s]' % (property, path, value))
@@ -236,7 +237,8 @@ class Location:
                                 source_path: str = None,
                                 dest_path: str = None,
                                 source_parent_path: str = None,
-                                compress: bool = False):
+                                compress: bool = False,
+                                identical_filesystem: bool = False):
 
         source_path = self.build_path(source_path)
         source_parent_path = self.build_path(source_parent_path) if source_parent_path else None
@@ -257,80 +259,83 @@ class Location:
         # btrfs send command/subprocess
         ionice_command_str = 'ionice -c3'
         send_command_str = ionice_command_str
-        if source_parent_path:
-            send_command_str += ' btrfs send -p "%s" "%s"' % (source_parent_path, source_path)
-        else:
-            send_command_str += ' btrfs send "%s"' % source_path
+        if not identical_filesystem:
+            if source_parent_path:
+                send_command_str += ' btrfs send -p "%s" "%s"' % (source_parent_path, source_path)
+            else:
+                send_command_str += ' btrfs send "%s"' % source_path
 
-        if compress:
-            send_command_str += ' | lzop -1'
-
-        try:
-            send_process = subprocess.Popen(self.build_subprocess_args(send_command_str),
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE)
-
-            # pv command/subprocess for progress indication
-            pv_process = None
-            if shell.exists('pv'):
-                pv_process = subprocess.Popen(['pv'], stdin=send_process.stdout, stdout=subprocess.PIPE)
-
-            # btrfs receive command/subprocess
-            receive_command_str = ionice_command_str + ' btrfs receive "%s"' % dest_path
             if compress:
-                receive_command_str = 'lzop -d | ' + receive_command_str
+                send_command_str += ' | lzop -1'
 
-            receive_process = subprocess.Popen(dest.build_subprocess_args(receive_command_str),
-                                               stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
-                                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-            receive_returncode = None
-            send_returncode = None
-            while receive_returncode is None or send_returncode is None:
-                receive_returncode = receive_process.poll()
-                send_returncode = send_process.poll()
-
-                if receive_returncode is not None and receive_returncode != 0:
-                    try:
-                        send_process.kill()
-                    except ProcessLookupError:
-                        pass
-                    break
-
-                if send_returncode is not None and send_returncode != 0:
-                    try:
-                        receive_process.kill()
-                    except ProcessLookupError:
-                        pass
-                    break
-
-                time.sleep(2)
-
-            # Wait for commands to complete
-            send_returncode = send_process.wait()
-            receive_returncode = receive_process.wait()
-
-            def log_process_error(proc_returncode, proc_args, proc_out):
-                proc_out_fmt = proc_out.read().decode().strip()
-                self._log_error('Command %s failed with error code %d (%s)'
-                                % (proc_args, proc_returncode, proc_out_fmt))
-
-            if receive_returncode:
-                log_process_error(receive_process.returncode, receive_process.args, receive_process.stdout)
-
-            if send_returncode:
-                log_process_error(send_process.returncode, send_process.args, send_process.stderr)
-
-            if receive_returncode or send_returncode:
-                raise Error("Transferring snapshot failed")
-
-        except BaseException as e:
             try:
-                # Try to remove incomplete destination subvolume
-                dest.remove_btrfs_subvolume(final_dest_path)
-            except Exception as e2:
-                self._log_warn('could not remove incomplete destination subvolume [%s]' % final_dest_path)
-            raise e
+                send_process = subprocess.Popen(self.build_subprocess_args(send_command_str),
+                                                stdout=subprocess.PIPE,
+                                                stderr=subprocess.PIPE)
+
+                # pv command/subprocess for progress indication
+                pv_process = None
+                if shell.exists('pv'):
+                    pv_process = subprocess.Popen(['pv'], stdin=send_process.stdout, stdout=subprocess.PIPE)
+
+                # btrfs receive command/subprocess
+                receive_command_str = ionice_command_str + ' btrfs receive "%s"' % dest_path
+                if compress:
+                    receive_command_str = 'lzop -d | ' + receive_command_str
+
+                receive_process = subprocess.Popen(dest.build_subprocess_args(receive_command_str),
+                                                stdin=pv_process.stdout if pv_process is not None else send_process.stdout,
+                                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+                receive_returncode = None
+                send_returncode = None
+                while receive_returncode is None or send_returncode is None:
+                    receive_returncode = receive_process.poll()
+                    send_returncode = send_process.poll()
+
+                    if receive_returncode is not None and receive_returncode != 0:
+                        try:
+                            send_process.kill()
+                        except ProcessLookupError:
+                            pass
+                        break
+
+                    if send_returncode is not None and send_returncode != 0:
+                        try:
+                            receive_process.kill()
+                        except ProcessLookupError:
+                            pass
+                        break
+
+                    time.sleep(2)
+
+                # Wait for commands to complete
+                send_returncode = send_process.wait()
+                receive_returncode = receive_process.wait()
+
+                def log_process_error(proc_returncode, proc_args, proc_out):
+                    proc_out_fmt = proc_out.read().decode().strip()
+                    self._log_error('Command %s failed with error code %d (%s)'
+                                    % (proc_args, proc_returncode, proc_out_fmt))
+
+                if receive_returncode:
+                    log_process_error(receive_process.returncode, receive_process.args, receive_process.stdout)
+
+                if send_returncode:
+                    log_process_error(send_process.returncode, send_process.args, send_process.stderr)
+
+                if receive_returncode or send_returncode:
+                    raise Error("Transferring snapshot failed")
+            except BaseException as e:
+                try:
+                    # Try to remove incomplete destination subvolume
+                    dest.remove_btrfs_subvolume(final_dest_path)
+                except Exception as e2:
+                    self._log_warn('could not remove incomplete destination subvolume [%s]' % final_dest_path)
+                raise e
+        else:
+            self._log_info('Source and Destination snapshots are assumed to be on the same filesystem')
+            self.create_btrfs_snapshot(source_path, dest_path, set_ro=False)
 
     def __str__(self):
         return self._format_log_msg('url [%s]' % (self.url.geturl()))
@@ -351,6 +356,7 @@ class JobLocation(Location):
     __KEY_KEEP = 'keep'
     __KEY_RETENTION = 'retention'
     __KEY_COMPRESS = 'compress'
+    __KEY_IDENT_FS = 'identical_filesystem'
 
     TYPE_SOURCE = 'Source'
     TYPE_DESTINATION = 'Destination'
@@ -369,6 +375,7 @@ class JobLocation(Location):
         self.__compress = False
         self.__retention = None
         self.__snapshots = []
+        self.__identical_filesystem = False
 
         self.location_type = location_type
 
@@ -433,6 +440,14 @@ class JobLocation(Location):
     @compress.setter
     def compress(self, compress: bool):
         self.__compress = compress
+    
+    @property
+    def identical_filesystem(self) -> bool:
+        return self.__identical_filesystem
+
+    @identical_filesystem.setter
+    def identical_filesystem(self, identical_filesystem: bool):
+        self.__identical_filesystem = identical_filesystem
 
     @property
     def container_subvolume_path(self) -> str:
@@ -609,6 +624,7 @@ class JobLocation(Location):
         destination = None
         retention = self.retention.expression_text if self.retention else None
         compress = self.compress
+        identical_filesystem = self.identical_filesystem
 
         # Set configuration fields to write
         both_remote_or_local = not (
@@ -650,6 +666,8 @@ class JobLocation(Location):
             parser.set(section, self.__KEY_RETENTION, str(retention))
         if compress:
             parser.set(section, self.__KEY_COMPRESS, str(compress))
+        if identical_filesystem:
+            parser.set(section, self.__KEY_IDENT_FS, str(identical_filesystem))
         parser.write(fileobject)
 
         config_str = fileobject.getvalue()
@@ -705,6 +723,8 @@ class JobLocation(Location):
         retention = RetentionExpression(retention) if retention else None
         compress = True if distutils.util.strtobool(parser.get(section, self.__KEY_COMPRESS, fallback='False')) \
             else False
+        identical_filesystem = True if distutils.util.strtobool(parser.get(section, self.__KEY_IDENT_FS, fallback='False')) \
+            else False
 
         if location_type == JobLocation.TYPE_SOURCE:
             # Amend url/container relpath from current path for source locations
@@ -734,16 +754,18 @@ class JobLocation(Location):
         self.uuid = location_uuid
         self.retention = retention
         self.compress = compress
+        self.identical_filesystem = identical_filesystem
 
         return corresponding_location
 
     def __str__(self):
-        return self._format_log_msg('url [%s] %sretention [%s] compress [%s]'
+        return self._format_log_msg('url [%s] %sretention [%s] compress [%s] identical_filesystem[%s]'
                                     % (self.url.geturl(),
                                        ('container [%s] ' % self.container_subvolume_relpath)
                                        if self.container_subvolume_relpath else '',
                                        self.retention,
-                                       self.compress))
+                                       self.compress,
+                                       self.identical_filesystem))
 
 
 class Job:
@@ -768,7 +790,8 @@ class Job:
              dest_url: parse.SplitResult,
              source_retention: RetentionExpression = None,
              dest_retention: RetentionExpression = None,
-             compress: bool = None) -> 'Job':
+             compress: bool = None,
+             identical_filesystem: bool = False) -> 'Job':
         """
         Initializes a new backup job
         :param source_url: Source url string
@@ -817,7 +840,16 @@ class Job:
             source.compress = False
         if dest and not dest.compress:
             dest.compress = False
-
+        
+        if identical_filesystem:
+            source.identical_filesystem = identical_filesystem
+            if dest:
+                dest.identical_filesystem = identical_filesystem
+        if not source.identical_filesystem:
+            source.identical_filesystem = False
+        if dest and not dest.identical_filesystem:
+            dest.identical_filesystem = False
+        
         # Prepare environments
         _logger.info('preparing source and destination environment')
         source.prepare_environment()
@@ -1021,7 +1053,8 @@ class Job:
                 self.source.transfer_btrfs_snapshot(self.destination,
                                                     source_path=temp_source_path,
                                                     source_parent_path=source_parent_path,
-                                                    compress=self.source.compress)
+                                                    compress=self.source.compress,
+                                                    identical_filesystem=self.source.identical_filesystem)
             except BaseException as e:
                 recover(lambda: self.source.remove_btrfs_subvolume(temp_source_path),
                         'could not remove temporary source snapshot [%s]' % temp_source_path)
