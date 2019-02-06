@@ -6,9 +6,17 @@
 # any later version.
 
 import re
+import sys
+import os
 
 from datetime import datetime
 from datetime import timezone
+
+from btrfs_sxbackup import shell
+
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class SnapshotName:
     """
@@ -149,3 +157,44 @@ class Snapshot:
     def format(self):
         return self.name.format()
 
+class Filesystem:
+    """
+    Class to determine and compare the filesystem a path is on
+    """
+    
+    __regex = re.compile('uuid: .*\\n')
+    
+    def __init__(self, path, url=None):
+        self.__path = os.path.abspath(path)
+        self.url = url
+    
+    @property
+    def path(self):
+        return self.__path
+    
+    @property
+    def uuid(self):
+        currentpath = self.__path
+        for x in range(0, len(currentpath.split(os.path.sep))):
+            try:
+                ret = shell.exec_check_output('btrfs fi show %s' % currentpath, self.url)
+            except Exception as e:
+                pass
+            else:
+                ret = ret.decode(sys.getdefaultencoding())
+                ret = self.__regex.search(ret).group(0).strip().split(' ')[-1]                
+                _logger.info('PATH %s has BTRFS filesystem uuid:%s' % (self.__path, ret))
+                return ret
+            currentpath = os.path.abspath(os.path.join(currentpath, os.pardir))
+        raise ValueError('Did not find btrfs filesystem UUID. Is %s on a BTRFS filesystem?' % self.path)
+    
+    def __eq__(self, other):
+        try:
+            return self.uuid == other.uuid
+        except Exception as e:
+            _logger.error('Cannot compare filesystems of %s and %s. Error: %s' % (self.path, other.path, str(e)))
+            _logger.error('Assuming filesystems are different')
+            return False
+        
+    def __repr__(self):
+        return self.uuid

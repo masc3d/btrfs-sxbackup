@@ -83,7 +83,6 @@ p_init.add_argument('destination_subvolume', type=str, metavar='destination-subv
 p_init.add_argument(*source_retention_args, **source_retention_kwargs)
 p_init.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_init.add_argument(*compress_args, **compress_kwargs)
-p_init.add_argument('--identical_filesystem', action='store_true', help='This avoids btrfs send/receive when the source and destination subvolumes are on the same btrfs filesystem')
 
 p_destroy = subparsers.add_parser(_CMD_DESTROY, help='destroy backup job by removing configuration files from source'
                                                      ' and destination. backup snapshots will be kept on both sides'
@@ -228,8 +227,7 @@ def main():
                            dest_url=urllib.parse.urlsplit(args.destination_subvolume) if args.destination_subvolume
                            else None,
                            dest_retention=destination_retention,
-                           compress=args.compress,
-                           identical_filesystem=args.identical_filesystem)
+                           compress=args.compress)
 
         elif args.command == _CMD_UPDATE:
             source_retention = RetentionExpression(args.source_retention) if args.source_retention else None

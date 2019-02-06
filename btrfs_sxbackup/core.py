@@ -19,9 +19,11 @@ from urllib import parse
 
 from btrfs_sxbackup.entities import Snapshot
 from btrfs_sxbackup.entities import SnapshotName
+from btrfs_sxbackup.entities import Filesystem
 from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup import shell
 from btrfs_sxbackup.entities import Subvolume
+
 
 _logger = logging.getLogger(__name__)
 _DEFAULT_RETENTION_SOURCE = RetentionExpression('3')
@@ -106,6 +108,8 @@ class Location:
         self.__url = None
 
         self.url = url
+        
+        self.filesystem = Filesystem(self.build_path(), self.url)
 
     @property
     def url(self) -> parse.SplitResult:
@@ -841,15 +845,19 @@ class Job:
         if dest and not dest.compress:
             dest.compress = False
         
-        if identical_filesystem:
-            source.identical_filesystem = identical_filesystem
-            if dest:
-                dest.identical_filesystem = identical_filesystem
-        if not source.identical_filesystem:
-            source.identical_filesystem = False
-        if dest and not dest.identical_filesystem:
-            dest.identical_filesystem = False
-        
+        # Check if the filesystem is on identical hosts
+        if str(source.url.netloc) == str(dest.url.netloc):
+            _logger.info('Identical hosts for source and destination')
+            #Check if the filesystems UUID is identical
+            if source.filesystem == dest.filesystem:
+                _logger.info('Identical filesystem fo source and destination')
+                source.identical_filesystem = True
+                dest.identical_filesystem = True
+            else:
+                source.identical_filesystem = False
+                dest.identical_filesystem = False
+                _logger.info('Source and destination are on different filesystems')
+            
         # Prepare environments
         _logger.info('preparing source and destination environment')
         source.prepare_environment()
