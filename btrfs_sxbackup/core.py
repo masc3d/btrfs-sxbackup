@@ -175,20 +175,14 @@ class Location:
         """
         return shell.build_subprocess_args(cmd, self.url)
 
-    def build_path(self, path: str) -> str:
+    def build_path(self, path: str = '') -> str:
         """
         Creates a path in the context of this location.
         Relative paths will be joined with the location's url path
         :param path: Base path
         :return: Contextual path
         """
-        if not path:
-            return self.url.path
-
-        if path.startswith(os.path.sep):
-            return path
-        else:
-            return os.path.join(self.url.path, path)
+        return os.path.abspath(os.path.join(self.url.path, path))
 
     def get_kernel_version(self):
         return self.exec_check_output('uname -srvo').decode().strip()
