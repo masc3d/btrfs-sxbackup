@@ -182,6 +182,8 @@ class Location:
         :param path: Base path
         :return: Contextual path
         """
+        if path is None:
+            path = ''
         return os.path.abspath(os.path.join(self.url.path, path))
 
     def get_kernel_version(self):
