@@ -204,6 +204,7 @@ update
                             argument)
       -c, --compress        enables compression during transmission. Requires lzop
                             to be installed on both source and destination
+      -nc, --no-compress    disable compression during transmission
 
 info
 ----
