@@ -25,7 +25,7 @@ def build_subprocess_args(cmd, url=None):
     # wrap into bash or ssh command respectively
     # depending if command is executed locally (host==None) or remotely
     url_string = None
-    ssh_args = ['ssh', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3']
+    ssh_args = ['ssh', '-o', 'ServerAliveInterval=18', '-o', 'ServerAliveCountMax=10']
 
     if url is not None and url.hostname is not None:
         url_string = url.hostname
