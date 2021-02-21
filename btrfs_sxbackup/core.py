@@ -28,7 +28,7 @@ from btrfs_sxbackup.entities import Subvolume
 _logger = logging.getLogger(__name__)
 _DEFAULT_RETENTION_SOURCE = RetentionExpression('3')
 _DEFAULT_RETENTION_DESTINATION = RetentionExpression('2d: 1/d, 2w:3/w, 1m:1/w, 2m:none')
-_DEFAULT_CONTAINER_RELPATH = '.sxbackup'
+DEFAULT_CONTAINER_RELPATH = '.sxbackup'
 
 
 class Error(Exception):
@@ -380,7 +380,7 @@ class JobLocation(Location):
         self.location_type = location_type
 
         if self.location_type == JobLocation.TYPE_SOURCE and container_subvolume_relpath is None:
-            self.container_subvolume_relpath = _DEFAULT_CONTAINER_RELPATH
+            self.container_subvolume_relpath = DEFAULT_CONTAINER_RELPATH
         else:
             self.container_subvolume_relpath = container_subvolume_relpath
 
@@ -791,6 +791,7 @@ class Job:
              source_retention: RetentionExpression = None,
              dest_retention: RetentionExpression = None,
              compress: bool = None,
+	     container_subvolume_relpath: str = DEFAULT_CONTAINER_RELPATH,
              identical_filesystem: bool = False) -> 'Job':
         """
         Initializes a new backup job
@@ -802,7 +803,7 @@ class Job:
         :return: Backup job
         :rtype: Job
         """
-        source = JobLocation(source_url, location_type=JobLocation.TYPE_SOURCE)
+        source = JobLocation(source_url, location_type=JobLocation.TYPE_SOURCE, container_subvolume_relpath=container_subvolume_relpath)
         dest = JobLocation(dest_url, location_type=JobLocation.TYPE_DESTINATION) if dest_url else None
 
         if source.has_configuration():
@@ -893,7 +894,7 @@ class Job:
         corresponding_location = None
         try:
             if not location.has_configuration():
-                location.container_subvolume_relpath = _DEFAULT_CONTAINER_RELPATH
+                location.container_subvolume_relpath = DEFAULT_CONTAINER_RELPATH
 
             corresponding_location = location.read_configuration()
         except subprocess.CalledProcessError:
