@@ -16,6 +16,7 @@ from subprocess import CalledProcessError
 from btrfs_sxbackup.core import Location
 from btrfs_sxbackup.core import Job
 from btrfs_sxbackup.core import Configuration
+from btrfs_sxbackup.core import DEFAULT_CONTAINER_RELPATH
 from btrfs_sxbackup.retention import RetentionExpression
 from btrfs_sxbackup import mail
 from btrfs_sxbackup import __version__
@@ -74,6 +75,15 @@ subvolumes_kwargs = {'type': str,
                      'metavar': 'subvolume',
                      'help': 'backup job source or destination subvolume. local path or SSH url'}
 
+container_subvolume_args = ['-csr', '--container-subvolume-relpath']
+container_subvolume_kwargs = {'type': str,
+                              'metavar': 'container-subvolume-relpath',
+                              'default': DEFAULT_CONTAINER_RELPATH,
+                              'help': 'Name of the non-visible subvolume relative path on the source'
+                                      ' side where metadata and backups are stored.  This can only be'
+                                      ' set with init.  Setting this is only required when the same'
+                                      ' source subvolume is being backed up to more than one location.'}
+
 # Initialize command cmdline params
 p_init = subparsers.add_parser(_CMD_INIT, help='initialize backup job')
 p_init.add_argument('source_subvolume', type=str, metavar='source-subvolume',
@@ -83,6 +93,7 @@ p_init.add_argument('destination_subvolume', type=str, metavar='destination-subv
 p_init.add_argument(*source_retention_args, **source_retention_kwargs)
 p_init.add_argument(*destination_retention_args, **destination_retention_kwargs)
 p_init.add_argument(*compress_args, **compress_kwargs)
+p_init.add_argument(*container_subvolume_args, **container_subvolume_kwargs)
 
 p_destroy = subparsers.add_parser(_CMD_DESTROY, help='destroy backup job by removing configuration files from source'
                                                      ' and destination. backup snapshots will be kept on both sides'
@@ -227,6 +238,7 @@ def main():
                            dest_url=urllib.parse.urlsplit(args.destination_subvolume) if args.destination_subvolume
                            else None,
                            dest_retention=destination_retention,
+			   container_subvolume_relpath=args.container_subvolume_relpath,
                            compress=args.compress)
 
         elif args.command == _CMD_UPDATE:

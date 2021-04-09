@@ -152,6 +152,11 @@ init
                             argument)
       -c, --compress        enables compression during transmission. Requires lzop
                             to be installed on both source and destination
+      -csr container-subvolume-relpath, --container-subvolume-relpath container-subvolume-relpath
+                            Name of the non-visible subvolume relative path on 
+                            the source side where metadata and backups are stored.
+                            This can only be set with init. Setting this is only
+                            required when the same source subvolume is being backed up to more than one location.
 
 run
 ---
