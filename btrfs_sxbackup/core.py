@@ -47,12 +47,14 @@ class Configuration:
     __KEY_DEST_RETENTION = 'destination-retention'
     __KEY_LOG_IDENT = 'log-ident'
     __key_EMAIL_RECIPIENT = 'email-recipient'
+    __KEY_SSH_OPTIONS = 'ssh-options'
 
     def __init__(self):
         self.__source_retention = None
         self.__destination_retention = None
         self.__log_ident = None
         self.__email_recipient = None
+        self.__ssh_options = None
 
     @staticmethod
     def instance():
@@ -80,6 +82,10 @@ class Configuration:
     def email_recipient(self):
         return self.__email_recipient
 
+    @property
+    def ssh_options(self):
+        return self.__ssh_options
+
     def read(self):
         cparser = ConfigParser()
 
@@ -93,6 +99,7 @@ class Configuration:
             self.__destination_retention = RetentionExpression(dest_retention_str) if dest_retention_str else None
             self.__log_ident = cparser.get(self.__SECTION_NAME, self.__KEY_LOG_IDENT, fallback=None)
             self.__email_recipient = cparser.get(self.__SECTION_NAME, self.__key_EMAIL_RECIPIENT, fallback=None)
+            self.__ssh_options = cparser.get(self.__SECTION_NAME, self.__KEY_SSH_OPTIONS, fallback=None)
 
 
 class Location:
@@ -108,8 +115,9 @@ class Location:
         self.__url = None
 
         self.url = url
-        
-        self.filesystem = Filesystem(self.build_path(), self.url)
+        self.ssh_options = Configuration.instance().ssh_options
+
+        self.filesystem = Filesystem(self.build_path(), self.url, self.ssh_options)
 
     @property
     def url(self) -> parse.SplitResult:
@@ -157,7 +165,7 @@ class Location:
         :param cmd: Command to execute
         :return: output
         """
-        return shell.exec_check_output(cmd, self.url)
+        return shell.exec_check_output(cmd, self.url, ssh_options=self.ssh_options)
 
     def exec_call(self, cmd) -> int:
         """
@@ -165,15 +173,15 @@ class Location:
         :param cmd: Command to execute
         :return: returncode
         """
-        return shell.exec_call(cmd, self.url)
+        return shell.exec_call(cmd, self.url, ssh_options=self.ssh_options)
 
     def build_subprocess_args(self, cmd) -> list:
         """
-        Wrapper for shell.create_subprocess_args, autmoatically passing location url
+        Wrapper for shell.create_subprocess_args, automatically passing location url
         :param cmd: Command to execute
         :return: subprocess args
         """
-        return shell.build_subprocess_args(cmd, self.url)
+        return shell.build_subprocess_args(cmd, self.url, ssh_options=self.ssh_options)
 
     def build_path(self, path: str = '') -> str:
         """
