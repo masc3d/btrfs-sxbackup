@@ -40,6 +40,8 @@ parser.add_argument('-q', '--quiet', dest='quiet', action='store_true', default=
 parser.add_argument('--version', action='version', version='%s v%s' % (_APP_NAME, __version__))
 parser.add_argument('-v', dest='verbosity', action='count',
                     help='can be specified multiple times to increase verbosity')
+parser.add_argument('-C', '--config', dest='configpath', type=str,
+                    help='specify path to non-default config file')
 
 subparsers = parser.add_subparsers()
 subparsers.required = True
@@ -134,8 +136,8 @@ def main():
     # Initialize logging
     args = parser.parse_args()
 
-    # Read global configuration
-    Configuration.instance().read()
+    # Read configuration
+    Configuration.instance(path=args.configpath).read()
 
     logger = logging.getLogger()
 
