@@ -164,9 +164,10 @@ class Filesystem:
     
     __regex = re.compile('uuid: .*\\n')
     
-    def __init__(self, path, url=None):
+    def __init__(self, path, url=None, ssh_options=None):
         self.__path = os.path.abspath(path)
         self.url = url
+        self.ssh_options = ssh_options
     
     @property
     def path(self):
@@ -177,7 +178,7 @@ class Filesystem:
         currentpath = self.__path
         for x in range(0, len(currentpath.split(os.path.sep))):
             try:
-                ret = shell.exec_check_output('btrfs fi show %s' % currentpath, self.url)
+                ret = shell.exec_check_output('btrfs fi show %s' % currentpath, self.url, self.ssh_options)
             except Exception as e:
                 pass
             else:
