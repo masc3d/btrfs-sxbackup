@@ -48,20 +48,21 @@ class Configuration:
     __KEY_LOG_IDENT = 'log-ident'
     __key_EMAIL_RECIPIENT = 'email-recipient'
 
-    def __init__(self):
+    def __init__(self, path=None):
+        self.__path = path
         self.__source_retention = None
         self.__destination_retention = None
         self.__log_ident = None
         self.__email_recipient = None
 
     @staticmethod
-    def instance():
+    def instance(path=None):
         """
         :return: Singleton instance
         :rtype: Configuration
         """
         if not Configuration.__instance:
-            Configuration.__instance = Configuration()
+            Configuration.__instance = Configuration(path)
         return Configuration.__instance
 
     @property
@@ -83,8 +84,11 @@ class Configuration:
     def read(self):
         cparser = ConfigParser()
 
-        if os.path.exists(self.__CONFIG_FILENAME):
-            with open(self.__CONFIG_FILENAME, 'r') as file:
+        if self.__path is None and os.path.exists(self.__CONFIG_FILENAME):
+            self.__path = self.__CONFIG_FILENAME
+
+        if os.path.exists(self.__path):
+            with open(self.__path, 'r') as file:
                 cparser.read_file(file)
 
             source_retention_str = cparser.get(self.__SECTION_NAME, self.__KEY_SOURCE_RETENTION, fallback=None)
