@@ -162,8 +162,10 @@ run
                               subvolume [subvolume ...]
 
     positional arguments:
-      subvolume             backup job source or destination subvolume. local path
-                            or SSH url
+      subvolume             backup job source or destination subvolume. Local path
+                            or SSH url. To transfer backup from remote machine to 
+                            local you need to pass the 'destination' path instead 
+                            of remote SSH url.
 
     optional arguments:
       -h, --help            show this help message and exit
